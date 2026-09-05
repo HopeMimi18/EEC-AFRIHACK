@@ -1,18 +1,24 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
+  type FormEvent,
   type RefObject,
 } from "react";
 import {
   AlertTriangle,
-  ArrowLeftRight,
+  ArrowLeft,
   CheckCircle2,
+  ClipboardCheck,
   Download,
   FileCheck2,
   FileText,
+  History,
   Landmark,
   LoaderCircle,
+  LockKeyhole,
+  LogOut,
   RefreshCcw,
   ShieldCheck,
   Upload,
@@ -23,33 +29,26 @@ import {
 } from "lucide-react";
 
 import {
-  getDownloadUrl,
+  clearSession,
+  downloadFna,
+  finaliseCase,
+  getAuditTrail,
+  getCase,
+  listCases,
+  loadSession,
+  login,
   processDocuments,
+  type AuditEvent,
+  type AuthSession,
+  type CaseSummary,
+  type ComplianceReadiness,
+  type FNADataPayload,
   type ProcessDocumentsResponse,
+  type UserRole,
 } from "./lib/api";
 
 import "./App.css";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ??
-  "http://127.0.0.1:8000";
-
-type PortalRole =
-  | "landing"
-  | "client"
-  | "adviser";
-
-type ReviewData =
-  ProcessDocumentsResponse["extracted_data"];
-
-type FinaliseFnaResponse = {
-  status: string;
-  verification_status: string;
-  extracted_data: ReviewData;
-  summary: ProcessDocumentsResponse["summary"];
-  processed_filename: string;
-  download_url: string;
-};
 
 type ProcessingStage =
   | "idle"
@@ -59,12 +58,14 @@ type ProcessingStage =
   | "generating"
   | "complete";
 
+
 type ChecklistKey =
   | "id"
   | "payslip"
   | "bank"
   | "irp5"
   | "address";
+
 
 const DOCUMENT_CHECKLIST: {
   key: ChecklistKey;
@@ -89,7 +90,10 @@ const DOCUMENT_CHECKLIST: {
   {
     key: "irp5",
     label: "IRP5",
-    hints: ["irp5", "tax certificate"],
+    hints: [
+      "irp5",
+      "tax certificate",
+    ],
   },
   {
     key: "address",
@@ -98,73 +102,138 @@ const DOCUMENT_CHECKLIST: {
   },
 ];
 
+
 function formatCurrency(
-  value: number | null | undefined
+  value:
+    | number
+    | null
+    | undefined
 ) {
-  return new Intl.NumberFormat("en-ZA", {
-    style: "currency",
-    currency: "ZAR",
-    maximumFractionDigits: 0,
-  }).format(value ?? 0);
+  return new Intl.NumberFormat(
+    "en-ZA",
+    {
+      style: "currency",
+      currency: "ZAR",
+      maximumFractionDigits: 0,
+    }
+  ).format(value ?? 0);
 }
 
+
+function formatDate(
+  value: string
+) {
+  return new Intl.DateTimeFormat(
+    "en-ZA",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }
+  ).format(
+    new Date(value)
+  );
+}
+
+
 function App() {
-  const [role, setRole] =
-    useState<PortalRole>("landing");
+  const [session, setSession] =
+    useState<AuthSession | null>(
+      () => loadSession()
+    );
+
+  const [
+    selectedLoginRole,
+    setSelectedLoginRole,
+  ] = useState<UserRole | null>(
+    null
+  );
 
   const [files, setFiles] =
     useState<File[]>([]);
+
+  const [consent, setConsent] =
+    useState(false);
 
   const [result, setResult] =
     useState<ProcessDocumentsResponse | null>(
       null
     );
 
-  const [reviewData, setReviewData] =
-    useState<ReviewData | null>(null);
-
-  const [finalising, setFinalising] =
-    useState(false);
+  const [
+    reviewData,
+    setReviewData,
+  ] = useState<FNADataPayload | null>(
+    null
+  );
 
   const [
     reviewFinalised,
     setReviewFinalised,
   ] = useState(false);
 
+  const [cases, setCases] =
+    useState<CaseSummary[]>([]);
+
+  const [audit, setAudit] =
+    useState<AuditEvent[]>([]);
+
   const [loading, setLoading] =
     useState(false);
+
+  const [
+    caseLoading,
+    setCaseLoading,
+  ] = useState(false);
+
+  const [
+    finalising,
+    setFinalising,
+  ] = useState(false);
 
   const [error, setError] =
     useState<string | null>(null);
 
   const [stage, setStage] =
-    useState<ProcessingStage>("idle");
+    useState<ProcessingStage>(
+      "idle"
+    );
 
-  const [dragActive, setDragActive] =
-    useState(false);
+  const [
+    dragActive,
+    setDragActive,
+  ] = useState(false);
 
   const fileInputRef =
-    useRef<HTMLInputElement | null>(null);
+    useRef<HTMLInputElement | null>(
+      null
+    );
 
   const client =
     reviewData?.client_demographics;
 
-  const checklist = useMemo(() => {
-    return DOCUMENT_CHECKLIST.map((item) => {
-      const matched = files.some((file) => {
-        const name = file.name.toLowerCase();
+  const checklist = useMemo(
+    () =>
+      DOCUMENT_CHECKLIST.map(
+        (item) => {
+          const matched =
+            files.some((file) => {
+              const name =
+                file.name.toLowerCase();
 
-        return item.hints.some((hint) =>
-          name.includes(hint)
-        );
-      });
+              return item.hints.some(
+                (hint) =>
+                  name.includes(hint)
+              );
+            });
 
-      return {
-        ...item,
-        matched,
-      };
-    });
-  }, [files]);
+          return {
+            ...item,
+            matched,
+          };
+        }
+      ),
+    [files]
+  );
 
   const stages = [
     {
@@ -181,7 +250,7 @@ function App() {
     },
     {
       key: "generating",
-      label: "Generate FNA",
+      label: "Generate Draft",
     },
     {
       key: "complete",
@@ -189,19 +258,85 @@ function App() {
     },
   ];
 
-  const stageOrder: ProcessingStage[] = [
-    "idle",
-    "uploading",
-    "extracting",
-    "validating",
-    "generating",
-    "complete",
-  ];
+  const stageOrder:
+    ProcessingStage[] = [
+      "idle",
+      "uploading",
+      "extracting",
+      "validating",
+      "generating",
+      "complete",
+    ];
 
   const currentStageIndex =
     stageOrder.indexOf(stage);
 
-  function addFiles(selectedFiles: File[]) {
+  useEffect(() => {
+    if (
+      session?.user.role !==
+      "adviser"
+    ) {
+      return;
+    }
+
+    void refreshCases(
+      session
+    );
+  }, [session]);
+
+  async function refreshCases(
+    activeSession = session
+  ) {
+    if (
+      !activeSession ||
+      activeSession.user.role !==
+        "adviser"
+    ) {
+      return;
+    }
+
+    try {
+      const items =
+        await listCases(
+          activeSession.access_token
+        );
+      setCases(items);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not load cases."
+      );
+    }
+  }
+
+  function resetWorkspace() {
+    setFiles([]);
+    setConsent(false);
+    setResult(null);
+    setReviewData(null);
+    setReviewFinalised(false);
+    setAudit([]);
+    setError(null);
+    setStage("idle");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value =
+        "";
+    }
+  }
+
+  function handleLogout() {
+    clearSession();
+    resetWorkspace();
+    setCases([]);
+    setSession(null);
+    setSelectedLoginRole(null);
+  }
+
+  function addFiles(
+    selectedFiles: File[]
+  ) {
     const allowedTypes = [
       "application/pdf",
       "image/png",
@@ -211,7 +346,10 @@ function App() {
     const validFiles: File[] = [];
     const rejected: string[] = [];
 
-    for (const selectedFile of selectedFiles) {
+    for (
+      const selectedFile
+      of selectedFiles
+    ) {
       if (
         !allowedTypes.includes(
           selectedFile.type
@@ -233,7 +371,9 @@ function App() {
         continue;
       }
 
-      validFiles.push(selectedFile);
+      validFiles.push(
+        selectedFile
+      );
     }
 
     const combined = [
@@ -241,23 +381,34 @@ function App() {
       ...validFiles,
     ];
 
-    const uniqueFiles = combined.filter(
-      (file, index, allFiles) =>
-        index ===
-        allFiles.findIndex(
-          (candidate) =>
-            candidate.name === file.name &&
-            candidate.size === file.size &&
-            candidate.lastModified ===
-              file.lastModified
-        )
-    );
+    const uniqueFiles =
+      combined.filter(
+        (
+          file,
+          index,
+          allFiles
+        ) =>
+          index ===
+          allFiles.findIndex(
+            (candidate) =>
+              candidate.name ===
+                file.name &&
+              candidate.size ===
+                file.size &&
+              candidate.lastModified ===
+                file.lastModified
+          )
+      );
 
-    if (uniqueFiles.length > 5) {
+    if (
+      uniqueFiles.length > 5
+    ) {
+      setFiles(
+        uniqueFiles.slice(0, 5)
+      );
       setError(
         "A maximum of 5 documents may be uploaded."
       );
-      setFiles(uniqueFiles.slice(0, 5));
       return;
     }
 
@@ -265,45 +416,71 @@ function App() {
     setResult(null);
     setReviewData(null);
     setReviewFinalised(false);
+    setAudit([]);
     setStage("idle");
+
     setError(
-      rejected.length > 0
+      rejected.length
         ? rejected.join(" ")
         : null
     );
   }
 
-  function removeFile(index: number) {
-    setFiles((currentFiles) =>
-      currentFiles.filter(
-        (_, fileIndex) =>
-          fileIndex !== index
-      )
+  function removeFile(
+    index: number
+  ) {
+    setFiles(
+      (currentFiles) =>
+        currentFiles.filter(
+          (_, fileIndex) =>
+            fileIndex !== index
+        )
     );
 
     setResult(null);
     setReviewData(null);
     setReviewFinalised(false);
+    setAudit([]);
     setStage("idle");
   }
 
   function clearFiles() {
     setFiles([]);
+    setConsent(false);
     setResult(null);
     setReviewData(null);
     setReviewFinalised(false);
+    setAudit([]);
     setError(null);
     setStage("idle");
 
     if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      fileInputRef.current.value =
+        "";
     }
   }
 
   async function handleProcess() {
-    if (files.length === 0) {
+    if (!session) {
+      setError(
+        "Please sign in first."
+      );
+      return;
+    }
+
+    if (!files.length) {
       setError(
         "Please select at least one client document."
+      );
+      return;
+    }
+
+    if (!consent) {
+      setError(
+        session.user.role ===
+          "client"
+          ? "Please confirm consent before submitting your documents."
+          : "Please confirm that client consent has been obtained."
       );
       return;
     }
@@ -313,42 +490,75 @@ function App() {
     setResult(null);
     setReviewData(null);
     setReviewFinalised(false);
+    setAudit([]);
 
     try {
       setStage("uploading");
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, 350)
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            250
+          )
       );
 
       setStage("extracting");
 
-      const responsePromise =
-        processDocuments(files);
+      const request =
+        processDocuments(
+          files,
+          consent,
+          session.access_token
+        );
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, 500)
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            400
+          )
       );
 
       setStage("validating");
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, 350)
+      await new Promise(
+        (resolve) =>
+          setTimeout(
+            resolve,
+            300
+          )
       );
 
       setStage("generating");
 
       const response =
-        await responsePromise;
+        await request;
 
       setResult(response);
       setReviewData(
         response.extracted_data
       );
+      setReviewFinalised(
+        response.case_status ===
+          "finalised"
+      );
       setStage("complete");
+
+      if (
+        session.user.role ===
+        "adviser"
+      ) {
+        await refreshCases();
+        const events =
+          await getAuditTrail(
+            response.case_id,
+            session.access_token
+          );
+        setAudit(events);
+      }
     } catch (err) {
       setStage("idle");
-
       setError(
         err instanceof Error
           ? err.message
@@ -359,59 +569,107 @@ function App() {
     }
   }
 
+  async function handleOpenCase(
+    caseId: string
+  ) {
+    if (
+      !session ||
+      session.user.role !==
+        "adviser"
+    ) {
+      return;
+    }
+
+    setCaseLoading(true);
+    setError(null);
+
+    try {
+      const [
+        caseData,
+        events,
+      ] = await Promise.all([
+        getCase(
+          caseId,
+          session.access_token
+        ),
+        getAuditTrail(
+          caseId,
+          session.access_token
+        ),
+      ]);
+
+      setResult(caseData);
+      setReviewData(
+        caseData.extracted_data
+      );
+      setReviewFinalised(
+        caseData.case_status ===
+          "finalised"
+      );
+      setAudit(events);
+      setStage("complete");
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not open case."
+      );
+    } finally {
+      setCaseLoading(false);
+    }
+  }
+
   function updateClientField<
-    K extends keyof ReviewData["client_demographics"],
+    K extends keyof FNADataPayload["client_demographics"],
   >(
     field: K,
-    value: ReviewData["client_demographics"][K]
+    value:
+      FNADataPayload[
+        "client_demographics"
+      ][K]
   ) {
-    setReviewData((current) => {
-      if (!current) {
-        return current;
-      }
+    setReviewData(
+      (current) => {
+        if (!current) {
+          return current;
+        }
 
-      return {
-        ...current,
-        client_demographics: {
-          ...current.client_demographics,
-          [field]: value,
-        },
-      };
-    });
+        return {
+          ...current,
+          client_demographics: {
+            ...current.client_demographics,
+            [field]: value,
+          },
+        };
+      }
+    );
 
     setReviewFinalised(false);
   }
 
-  function formatApiError(
-    detail: unknown
-  ) {
-    if (typeof detail === "string") {
-      return detail;
-    }
-
-    if (Array.isArray(detail)) {
-      return detail
-        .map((item) => {
-          if (
-            item &&
-            typeof item === "object" &&
-            "msg" in item
-          ) {
-            return String(item.msg);
-          }
-
-          return "Validation failed.";
-        })
-        .join(" ");
-    }
-
-    return "Final FNA generation failed.";
-  }
-
-  async function handleFinaliseFna() {
-    if (!reviewData) {
+  async function handleFinalise() {
+    if (
+      !session ||
+      session.user.role !==
+        "adviser"
+    ) {
       setError(
-        "No adviser review data is available."
+        "Adviser access is required."
+      );
+      return;
+    }
+
+    if (
+      !result ||
+      !reviewData
+    ) {
+      setError(
+        "Open a case before finalising."
       );
       return;
     }
@@ -420,60 +678,28 @@ function App() {
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/finalise-fna`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify(reviewData),
-        }
-      );
-
-      if (!response.ok) {
-        let message =
-          "Final FNA generation failed.";
-
-        try {
-          const body =
-            await response.json();
-          message =
-            formatApiError(body.detail);
-        } catch {
-          // Keep default message.
-        }
-
-        throw new Error(message);
-      }
-
       const finalResult =
-        (await response.json()) as FinaliseFnaResponse;
+        await finaliseCase(
+          result.case_id,
+          reviewData,
+          session.access_token
+        );
 
+      setResult(finalResult);
       setReviewData(
         finalResult.extracted_data
       );
-
-      setResult((current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          extracted_data:
-            finalResult.extracted_data,
-          summary:
-            finalResult.summary,
-          processed_filename:
-            finalResult.processed_filename,
-          download_url:
-            finalResult.download_url,
-        };
-      });
-
       setReviewFinalised(true);
+
+      await refreshCases();
+
+      const events =
+        await getAuditTrail(
+          finalResult.case_id,
+          session.access_token
+        );
+
+      setAudit(events);
     } catch (err) {
       setError(
         err instanceof Error
@@ -485,29 +711,74 @@ function App() {
     }
   }
 
-  function switchRole(
-    nextRole: PortalRole
-  ) {
-    setRole(nextRole);
-    setError(null);
+  async function handleDownload() {
+    if (
+      !session ||
+      session.user.role !==
+        "adviser" ||
+      !result
+    ) {
+      return;
+    }
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    try {
+      await downloadFna(
+        result.download_url,
+        result.processed_filename,
+        session.access_token
+      );
+
+      const events =
+        await getAuditTrail(
+          result.case_id,
+          session.access_token
+        );
+
+      setAudit(events);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Download failed."
+      );
+    }
   }
 
-  if (role === "landing") {
+  if (!session) {
+    if (!selectedLoginRole) {
+      return (
+        <RoleLanding
+          onSelect={
+            setSelectedLoginRole
+          }
+        />
+      );
+    }
+
     return (
-      <RoleLanding
-        onSelect={switchRole}
+      <LoginScreen
+        role={
+          selectedLoginRole
+        }
+        onBack={() =>
+          setSelectedLoginRole(
+            null
+          )
+        }
+        onSuccess={
+          setSession
+        }
       />
     );
   }
 
-  if (role === "client") {
+  if (
+    session.user.role ===
+    "client"
+  ) {
     return (
       <ClientPortal
+        session={session}
         files={files}
         result={result}
         loading={loading}
@@ -515,13 +786,31 @@ function App() {
         stage={stage}
         dragActive={dragActive}
         checklist={checklist}
-        fileInputRef={fileInputRef}
-        onAddFiles={addFiles}
-        onRemoveFile={removeFile}
-        onClearFiles={clearFiles}
-        onProcess={handleProcess}
-        onDragActive={setDragActive}
-        onSwitchRole={switchRole}
+        consent={consent}
+        fileInputRef={
+          fileInputRef
+        }
+        onAddFiles={
+          addFiles
+        }
+        onRemoveFile={
+          removeFile
+        }
+        onClearFiles={
+          clearFiles
+        }
+        onProcess={
+          handleProcess
+        }
+        onDragActive={
+          setDragActive
+        }
+        onConsentChange={
+          setConsent
+        }
+        onLogout={
+          handleLogout
+        }
       />
     );
   }
@@ -536,7 +825,9 @@ function App() {
             </div>
 
             <div>
-              <h2>Royal Square</h2>
+              <h2>
+                Royal Square
+              </h2>
               <span>
                 Financial Portal
               </span>
@@ -544,41 +835,39 @@ function App() {
           </div>
 
           <nav className="nav">
-            <button
-              className="nav-item"
-              onClick={() =>
-                switchRole("client")
-              }
-            >
-              <UsersRound size={19} />
-              Client Intake
-            </button>
-
             <button className="nav-item active">
-              <UserRound size={19} />
+              <UserRound
+                size={19}
+              />
               Adviser Workspace
             </button>
 
             <button className="nav-item">
-              <WalletCards size={19} />
+              <WalletCards
+                size={19}
+              />
               FNA Records
             </button>
 
             <button className="nav-item">
-              <ShieldCheck size={19} />
-              Compliance
+              <ShieldCheck
+                size={19}
+              />
+              Compliance Readiness
             </button>
           </nav>
         </div>
 
         <div className="sidebar-footer">
           <div className="secure-label">
-            <ShieldCheck size={17} />
-            Adviser Workspace
+            <LockKeyhole
+              size={17}
+            />
+            Authenticated Adviser
           </div>
 
           <span>
-            AfriHack 2026 Prototype
+            {session.user.email}
           </span>
         </div>
       </aside>
@@ -595,25 +884,14 @@ function App() {
             </h1>
 
             <p className="subtitle">
-              Review client documents,
-              validate financial information
-              and prepare the final FNA.
+              Review submitted cases,
+              correct financial data and
+              generate adviser-verified
+              FNA workbooks.
             </p>
           </div>
 
           <div className="topbar-actions">
-            <button
-              className="role-switch-button"
-              onClick={() =>
-                switchRole("client")
-              }
-            >
-              <ArrowLeftRight
-                size={16}
-              />
-              Client View
-            </button>
-
             <div className="prototype-badge">
               PROTOTYPE
             </div>
@@ -621,11 +899,23 @@ function App() {
             <div className="adviser-avatar">
               AD
             </div>
+
+            <button
+              className="role-switch-button"
+              onClick={
+                handleLogout
+              }
+            >
+              <LogOut size={16} />
+              Sign out
+            </button>
           </div>
         </header>
 
         <section className="notice-card">
-          <AlertTriangle size={20} />
+          <AlertTriangle
+            size={20}
+          />
 
           <div>
             <strong>
@@ -633,52 +923,45 @@ function App() {
             </strong>
 
             <p>
-              Extracted and calculated
-              information must be reviewed
-              before it is relied upon for a
-              Financial Needs Analysis.
+              Compliance Readiness is a
+              decision-support checklist,
+              not an automatic FAIS/FICA
+              compliance determination.
             </p>
           </div>
         </section>
 
-        {result?.extraction_mode ===
-          "demo" && (
-          <section className="demo-banner">
-            <div className="demo-icon">
-              <Landmark size={20} />
-            </div>
-
-            <div>
-              <strong>
-                DEMO MODE — Synthetic Data
-              </strong>
-
-              <p>
-                {result.demo_warning ??
-                  "Synthetic demonstration information is currently enabled."}
-              </p>
-            </div>
-          </section>
-        )}
+        <CaseQueue
+          cases={cases}
+          loading={caseLoading}
+          activeCaseId={
+            result?.case_id ??
+            null
+          }
+          onOpen={
+            handleOpenCase
+          }
+          onRefresh={() =>
+            void refreshCases()
+          }
+        />
 
         <div className="workspace-grid">
           <section className="card upload-card">
             <div className="card-heading">
               <div>
                 <span className="step-label">
-                  STEP 01
+                  NEW CASE
                 </span>
 
                 <h2>
-                  Client Document Pack
+                  Upload on behalf of a client
                 </h2>
 
                 <p>
-                  Upload directly as an
-                  adviser, or review the pack
-                  submitted from the client
-                  portal in this prototype
-                  session.
+                  Advisers may create a
+                  case directly after
+                  confirming client consent.
                 </p>
               </div>
 
@@ -691,31 +974,47 @@ function App() {
             <DocumentUploader
               files={files}
               loading={loading}
-              dragActive={dragActive}
-              fileInputRef={fileInputRef}
+              dragActive={
+                dragActive
+              }
+              fileInputRef={
+                fileInputRef
+              }
+              consent={consent}
+              role="adviser"
               processLabel="Process"
-              onAddFiles={addFiles}
-              onRemoveFile={removeFile}
-              onClearFiles={clearFiles}
-              onProcess={handleProcess}
+              onAddFiles={
+                addFiles
+              }
+              onRemoveFile={
+                removeFile
+              }
+              onClearFiles={
+                clearFiles
+              }
+              onProcess={
+                handleProcess
+              }
               onDragActive={
                 setDragActive
+              }
+              onConsentChange={
+                setConsent
               }
             />
 
             {error && (
-              <div className="error-message">
-                <AlertTriangle
-                  size={18}
-                />
-                {error}
-              </div>
+              <ErrorMessage
+                message={error}
+              />
             )}
           </section>
 
           <ProcessingCard
             stages={stages}
-            stageOrder={stageOrder}
+            stageOrder={
+              stageOrder
+            }
             stage={stage}
             currentStageIndex={
               currentStageIndex
@@ -727,22 +1026,81 @@ function App() {
           reviewData &&
           client && (
             <div className="results-area">
+              {result.extraction_mode ===
+                "demo" && (
+                <section className="demo-banner">
+                  <div className="demo-icon">
+                    <Landmark
+                      size={20}
+                    />
+                  </div>
+
+                  <div>
+                    <strong>
+                      DEMO MODE —
+                      Synthetic Data
+                    </strong>
+
+                    <p>
+                      {
+                        result.demo_warning
+                      }
+                    </p>
+                  </div>
+                </section>
+              )}
+
+              <section className="case-identity-bar">
+                <div>
+                  <span>
+                    CASE
+                  </span>
+                  <strong>
+                    {
+                      result.case_id
+                    }
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    OWNER
+                  </span>
+                  <strong>
+                    {
+                      result.owner_email
+                    }
+                  </strong>
+                </div>
+
+                <StatusPill
+                  status={
+                    result.case_status
+                  }
+                />
+              </section>
+
+              <CompliancePanel
+                readiness={
+                  result.compliance_readiness
+                }
+              />
+
               <section className="card">
                 <div className="card-heading">
                   <div>
                     <span className="step-label">
-                      STEP 02
+                      ADVISER REVIEW
                     </span>
 
                     <h2>
-                      Adviser Review
+                      Verify client information
                     </h2>
 
                     <p>
-                      Verify and correct the
-                      structured client
-                      information before
-                      finalising the FNA.
+                      Correct the extracted
+                      values before generating
+                      the final workbook.
                     </p>
                   </div>
 
@@ -750,24 +1108,6 @@ function App() {
                     className="heading-icon"
                     size={28}
                   />
-                </div>
-
-                <div className="document-result-summary">
-                  <CheckCircle2
-                    size={18}
-                  />
-
-                  <span>
-                    {
-                      result.document_count
-                    }{" "}
-                    client{" "}
-                    {result.document_count ===
-                    1
-                      ? "document"
-                      : "documents"}{" "}
-                    accepted and processed.
-                  </span>
                 </div>
 
                 <div className="review-grid">
@@ -854,7 +1194,9 @@ function App() {
                         "gross_monthly_income",
                         value === ""
                           ? null
-                          : Number(value)
+                          : Number(
+                              value
+                            )
                       )
                     }
                   />
@@ -871,7 +1213,9 @@ function App() {
                         "net_monthly_income",
                         value === ""
                           ? null
-                          : Number(value)
+                          : Number(
+                              value
+                            )
                       )
                     }
                   />
@@ -891,8 +1235,8 @@ function App() {
 
                     <span>
                       {reviewFinalised
-                        ? "The reviewed values were validated and a final FNA workbook was generated."
-                        : "Review or correct the values against the client's source documents, then generate the final FNA."}
+                        ? `Verified by ${result.verified_by ?? session.user.email}.`
+                        : "Confirm the information against the source documents. Backend role checks prevent clients from finalising a case."}
                     </span>
                   </div>
                 </div>
@@ -900,9 +1244,11 @@ function App() {
                 <button
                   className="primary-button"
                   onClick={
-                    handleFinaliseFna
+                    handleFinalise
                   }
-                  disabled={finalising}
+                  disabled={
+                    finalising
+                  }
                   type="button"
                 >
                   {finalising ? (
@@ -911,7 +1257,7 @@ function App() {
                         className="spin"
                         size={19}
                       />
-                      Generating Final FNA
+                      Validating & Generating
                     </>
                   ) : (
                     <>
@@ -919,11 +1265,19 @@ function App() {
                         size={19}
                       />
                       {reviewFinalised
-                        ? "Regenerate Final FNA"
+                        ? "Revalidate & Regenerate Final FNA"
                         : "Save Corrections & Generate Final FNA"}
                     </>
                   )}
                 </button>
+
+                {error && (
+                  <ErrorMessage
+                    message={
+                      error
+                    }
+                  />
+                )}
               </section>
 
               <section className="summary-section">
@@ -1000,7 +1354,7 @@ function App() {
 
                 <div className="completion-copy">
                   <span className="step-label">
-                    STEP 03
+                    WORKBOOK
                   </span>
 
                   <h2>
@@ -1011,8 +1365,8 @@ function App() {
 
                   <p>
                     {reviewFinalised
-                      ? "The adviser-reviewed values have been validated and written to a final Royal Square FNA workbook."
-                      : "A draft Royal Square FNA workbook was generated from the current extraction. Complete adviser verification above before relying on it."}
+                      ? "The final workbook is available to authenticated advisers only."
+                      : "Complete adviser verification before treating the workbook as final."}
                   </p>
 
                   <small>
@@ -1022,35 +1376,36 @@ function App() {
                   </small>
                 </div>
 
-                <a
+                <button
                   className="download-button"
-                  href={getDownloadUrl(
-                    result.download_url
-                  )}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={() =>
+                    void handleDownload()
+                  }
+                  disabled={
+                    !reviewFinalised
+                  }
                 >
-                  <Download size={19} />
-                  {reviewFinalised
-                    ? "Download Final FNA"
-                    : "Download Draft FNA"}
-                </a>
+                  <Download
+                    size={19}
+                  />
+                  Download Final FNA
+                </button>
               </section>
+
+              <AuditTrail
+                events={audit}
+              />
 
               <button
                 className="secondary-button"
-                onClick={() => {
-                  clearFiles();
-                  window.scrollTo({
-                    top: 0,
-                    behavior: "smooth",
-                  });
-                }}
+                onClick={
+                  clearFiles
+                }
               >
                 <RefreshCcw
                   size={17}
                 />
-                Process Another Client
+                Start Another Case
               </button>
             </div>
           )}
@@ -1059,11 +1414,12 @@ function App() {
   );
 }
 
+
 function RoleLanding({
   onSelect,
 }: {
   onSelect: (
-    role: PortalRole
+    role: UserRole
   ) => void;
 }) {
   return (
@@ -1079,7 +1435,8 @@ function RoleLanding({
               Royal Square
             </strong>
             <span>
-              Financial Onboarding Portal
+              Secure Financial
+              Onboarding Portal
             </span>
           </div>
         </div>
@@ -1090,15 +1447,16 @@ function RoleLanding({
           </span>
 
           <h1>
-            One onboarding journey.
-            <br />
-            Two purpose-built experiences.
+            Secure onboarding for
+            clients and advisers.
           </h1>
 
           <p>
-            Clients submit their financial
-            document pack. Advisers verify,
-            correct and finalise the FNA.
+            Authentication and role-based
+            access control now separate
+            document submission from adviser
+            verification and final FNA
+            generation.
           </p>
         </div>
 
@@ -1120,25 +1478,27 @@ function RoleLanding({
             </span>
 
             <h2>
-              Start My Onboarding
+              Submit My Documents
             </h2>
 
             <p>
-              Upload your financial
-              documents, follow the checklist
-              and submit the pack for adviser
-              review.
+              Sign in, record consent,
+              upload your financial
+              document pack and submit
+              it for adviser review.
             </p>
 
             <strong>
-              Enter Client Portal →
+              Client Sign In →
             </strong>
           </button>
 
           <button
             className="role-card featured-role"
             onClick={() =>
-              onSelect("adviser")
+              onSelect(
+                "adviser"
+              )
             }
           >
             <div className="role-card-icon">
@@ -1156,30 +1516,226 @@ function RoleLanding({
             </h2>
 
             <p>
-              Verify structured information,
-              correct values and generate the
-              final Royal Square FNA
-              workbook.
+              Access the adviser case queue,
+              correct structured data,
+              review readiness checks and
+              generate final FNA workbooks.
             </p>
 
             <strong>
-              Enter Adviser Portal →
+              Adviser Sign In →
             </strong>
           </button>
         </div>
 
         <div className="landing-footnote">
-          Prototype note: the client and
-          adviser views share the same browser
-          session. Demo Mode uses synthetic
-          financial data.
+          Hackathon Demo Mode: use synthetic
+          or test documents only.
         </div>
       </div>
     </div>
   );
 }
 
+
+function LoginScreen({
+  role,
+  onBack,
+  onSuccess,
+}: {
+  role: UserRole;
+  onBack: () => void;
+  onSuccess: (
+    session: AuthSession
+  ) => void;
+}) {
+  const demoEmail =
+    role === "client"
+      ? "client@demo.co.za"
+      : "adviser@demo.co.za";
+
+  const demoPassword =
+    role === "client"
+      ? "Client123!"
+      : "Adviser123!";
+
+  const [email, setEmail] =
+    useState(demoEmail);
+
+  const [
+    password,
+    setPassword,
+  ] = useState(demoPassword);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(
+      null
+    );
+
+  async function submit(
+    event:
+      FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const auth =
+        await login(
+          email,
+          password
+        );
+
+      if (
+        auth.user.role !== role
+      ) {
+        throw new Error(
+          `This account is registered as ${auth.user.role}, not ${role}.`
+        );
+      }
+
+      onSuccess(auth);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Sign in failed."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="login-shell">
+      <div className="login-panel">
+        <button
+          className="login-back"
+          onClick={onBack}
+        >
+          <ArrowLeft
+            size={17}
+          />
+          Back
+        </button>
+
+        <div className="login-icon">
+          <LockKeyhole
+            size={27}
+          />
+        </div>
+
+        <span className="step-label">
+          {role === "client"
+            ? "CLIENT ACCESS"
+            : "ADVISER ACCESS"}
+        </span>
+
+        <h1>
+          Sign in to Royal Square
+        </h1>
+
+        <p>
+          This prototype uses signed
+          bearer tokens and backend role
+          checks. The credentials below are
+          seeded demo accounts.
+        </p>
+
+        <form
+          className="login-form"
+          onSubmit={submit}
+        >
+          <label>
+            <span>
+              Email
+            </span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) =>
+                setEmail(
+                  event.target.value
+                )
+              }
+              autoComplete="username"
+            />
+          </label>
+
+          <label>
+            <span>
+              Password
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) =>
+                setPassword(
+                  event.target.value
+                )
+              }
+              autoComplete="current-password"
+            />
+          </label>
+
+          <button
+            className="primary-button"
+            disabled={loading}
+            type="submit"
+          >
+            {loading ? (
+              <>
+                <LoaderCircle
+                  className="spin"
+                  size={18}
+                />
+                Signing in
+              </>
+            ) : (
+              <>
+                <LockKeyhole
+                  size={18}
+                />
+                Sign in as{" "}
+                {role ===
+                "client"
+                  ? "Client"
+                  : "Adviser"}
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="demo-credentials">
+          <strong>
+            Demo credentials
+          </strong>
+          <span>
+            {demoEmail}
+          </span>
+          <span>
+            {demoPassword}
+          </span>
+        </div>
+
+        {error && (
+          <ErrorMessage
+            message={error}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function ClientPortal({
+  session,
   files,
   result,
   loading,
@@ -1187,14 +1743,17 @@ function ClientPortal({
   stage,
   dragActive,
   checklist,
+  consent,
   fileInputRef,
   onAddFiles,
   onRemoveFile,
   onClearFiles,
   onProcess,
   onDragActive,
-  onSwitchRole,
+  onConsentChange,
+  onLogout,
 }: {
+  session: AuthSession;
   files: File[];
   result:
     | ProcessDocumentsResponse
@@ -1209,6 +1768,7 @@ function ClientPortal({
     hints: string[];
     matched: boolean;
   }[];
+  consent: boolean;
   fileInputRef:
     RefObject<HTMLInputElement | null>;
   onAddFiles: (
@@ -1222,9 +1782,10 @@ function ClientPortal({
   onDragActive: (
     active: boolean
   ) => void;
-  onSwitchRole: (
-    role: PortalRole
+  onConsentChange: (
+    value: boolean
   ) => void;
+  onLogout: () => void;
 }) {
   const submitted =
     stage === "complete" &&
@@ -1253,16 +1814,20 @@ function ClientPortal({
             CLIENT
           </span>
 
+          <span className="signed-in-user">
+            {
+              session.user.email
+            }
+          </span>
+
           <button
             className="role-switch-button"
-            onClick={() =>
-              onSwitchRole("adviser")
-            }
+            onClick={onLogout}
           >
-            <ArrowLeftRight
+            <LogOut
               size={16}
             />
-            Adviser View
+            Sign out
           </button>
         </div>
       </header>
@@ -1278,25 +1843,30 @@ function ClientPortal({
           </h1>
 
           <p>
-            Upload the documents requested by
-            your adviser. The adviser will
-            verify the information before it
-            is used for your Financial Needs
-            Analysis.
+            Upload the documents requested
+            by your adviser. Only an
+            authenticated adviser can
+            finalise or download the FNA
+            workbook.
           </p>
         </section>
 
         <section className="client-safety-note">
-          <ShieldCheck size={19} />
+          <ShieldCheck
+            size={19}
+          />
+
           <div>
             <strong>
-              Prototype demonstration
+              Prototype privacy notice
             </strong>
+
             <span>
-              Use synthetic or test documents
-              only. Do not upload real client
-              information for the hackathon
-              demo.
+              Use synthetic or test
+              documents only. Do not upload
+              real personal or financial
+              information during the
+              hackathon demonstration.
             </span>
           </div>
         </section>
@@ -1305,16 +1875,21 @@ function ClientPortal({
           "demo" && (
           <section className="demo-banner">
             <div className="demo-icon">
-              <Landmark size={20} />
+              <Landmark
+                size={20}
+              />
             </div>
 
             <div>
               <strong>
-                DEMO MODE — Synthetic Data
+                DEMO MODE —
+                Synthetic Data
               </strong>
 
               <p>
-                {result.demo_warning}
+                {
+                  result.demo_warning
+                }
               </p>
             </div>
           </section>
@@ -1333,8 +1908,9 @@ function ClientPortal({
                 </h2>
 
                 <p>
-                  Upload up to five PDF, PNG,
-                  JPG or JPEG documents.
+                  Up to five supported
+                  documents, maximum 10 MB
+                  each.
                 </p>
               </div>
 
@@ -1347,29 +1923,39 @@ function ClientPortal({
             <DocumentUploader
               files={files}
               loading={loading}
-              dragActive={dragActive}
-              fileInputRef={fileInputRef}
+              dragActive={
+                dragActive
+              }
+              fileInputRef={
+                fileInputRef
+              }
+              consent={consent}
+              role="client"
               processLabel="Submit"
-              onAddFiles={onAddFiles}
+              onAddFiles={
+                onAddFiles
+              }
               onRemoveFile={
                 onRemoveFile
               }
               onClearFiles={
                 onClearFiles
               }
-              onProcess={onProcess}
+              onProcess={
+                onProcess
+              }
               onDragActive={
                 onDragActive
+              }
+              onConsentChange={
+                onConsentChange
               }
             />
 
             {error && (
-              <div className="error-message">
-                <AlertTriangle
-                  size={18}
-                />
-                {error}
-              </div>
+              <ErrorMessage
+                message={error}
+              />
             )}
           </section>
 
@@ -1385,8 +1971,9 @@ function ClientPortal({
                 </h2>
 
                 <p>
-                  Filenames help the prototype
-                  recognise the document type.
+                  Filename matching supports
+                  the prototype readiness
+                  check.
                 </p>
               </div>
 
@@ -1397,36 +1984,42 @@ function ClientPortal({
             </div>
 
             <div className="client-checklist">
-              {checklist.map((item) => (
-                <div
-                  className={`checklist-row ${
-                    item.matched
-                      ? "matched"
-                      : ""
-                  }`}
-                  key={item.key}
-                >
-                  <div className="checklist-status">
-                    {item.matched ? (
-                      <CheckCircle2
-                        size={18}
-                      />
-                    ) : (
-                      <span />
-                    )}
+              {checklist.map(
+                (item) => (
+                  <div
+                    className={`checklist-row ${
+                      item.matched
+                        ? "matched"
+                        : ""
+                    }`}
+                    key={
+                      item.key
+                    }
+                  >
+                    <div className="checklist-status">
+                      {item.matched ? (
+                        <CheckCircle2
+                          size={18}
+                        />
+                      ) : (
+                        <span />
+                      )}
+                    </div>
+
+                    <strong>
+                      {
+                        item.label
+                      }
+                    </strong>
+
+                    <small>
+                      {item.matched
+                        ? "Added"
+                        : "Not added"}
+                    </small>
                   </div>
-
-                  <strong>
-                    {item.label}
-                  </strong>
-
-                  <small>
-                    {item.matched
-                      ? "Added"
-                      : "Not added"}
-                  </small>
-                </div>
-              ))}
+                )
+              )}
             </div>
 
             <div className="checklist-count">
@@ -1449,79 +2042,98 @@ function ClientPortal({
 
             <div>
               <strong>
-                Preparing your submission
+                Preparing your
+                submission
               </strong>
+
               <span>
-                The document pack is being
-                validated for the adviser
-                workflow.
+                Authentication, file
+                validation and case checks
+                are running.
               </span>
             </div>
           </section>
         )}
 
-        {submitted && (
-          <section className="client-submission-success">
-            <div className="success-icon-large">
-              <CheckCircle2
-                size={34}
+        {submitted && result && (
+          <>
+            <section className="client-submission-success">
+              <div className="success-icon-large">
+                <CheckCircle2
+                  size={34}
+                />
+              </div>
+
+              <div>
+                <span className="step-label">
+                  CASE SUBMITTED
+                </span>
+
+                <h2>
+                  Your documents are ready
+                  for adviser review
+                </h2>
+
+                <p>
+                  Case{" "}
+                  <strong>
+                    {
+                      result.case_id
+                    }
+                  </strong>{" "}
+                  contains{" "}
+                  {
+                    result.document_count
+                  }{" "}
+                  document(s). The adviser
+                  must sign in separately
+                  to review and finalise it.
+                </p>
+              </div>
+
+              <StatusPill
+                status={
+                  result.case_status
+                }
               />
-            </div>
+            </section>
 
-            <div>
-              <span className="step-label">
-                SUBMISSION READY
-              </span>
-
-              <h2>
-                Your document pack is ready
-                for adviser review
-              </h2>
-
-              <p>
-                {result.document_count}{" "}
-                {result.document_count === 1
-                  ? "document was"
-                  : "documents were"}{" "}
-                accepted. In this prototype,
-                the adviser can continue the
-                case in the shared workspace.
-              </p>
-            </div>
-
-            <button
-              className="download-button"
-              onClick={() =>
-                onSwitchRole("adviser")
+            <CompliancePanel
+              readiness={
+                result.compliance_readiness
               }
-            >
-              <UserRound size={18} />
-              Open Adviser Workspace
-            </button>
-          </section>
+              clientView
+            />
+          </>
         )}
       </main>
     </div>
   );
 }
 
+
 function DocumentUploader({
   files,
   loading,
   dragActive,
   fileInputRef,
+  consent,
+  role,
   processLabel,
   onAddFiles,
   onRemoveFile,
   onClearFiles,
   onProcess,
   onDragActive,
+  onConsentChange,
 }: {
   files: File[];
   loading: boolean;
   dragActive: boolean;
   fileInputRef:
     RefObject<HTMLInputElement | null>;
+  consent: boolean;
+  role: UserRole;
   processLabel: string;
   onAddFiles: (
     files: File[]
@@ -1533,6 +2145,9 @@ function DocumentUploader({
   onProcess: () => void;
   onDragActive: (
     active: boolean
+  ) => void;
+  onConsentChange: (
+    value: boolean
   ) => void;
 }) {
   return (
@@ -1573,29 +2188,35 @@ function DocumentUploader({
           onChange={(event) => {
             onAddFiles(
               Array.from(
-                event.target.files ?? []
+                event.target.files ??
+                  []
               )
             );
 
-            event.target.value = "";
+            event.target.value =
+              "";
           }}
         />
 
         <div className="upload-icon">
-          <Upload size={28} />
+          <Upload
+            size={28}
+          />
         </div>
 
         <strong>
-          Drag & drop client documents
+          Drag & drop client
+          documents
         </strong>
 
         <span>
-          or click to select multiple files
+          or click to select
+          multiple files
         </span>
 
         <small>
-          PDF, PNG, JPG or JPEG · Max 5
-          documents · 10 MB each
+          PDF, PNG, JPG or JPEG ·
+          Max 5 documents · 10 MB each
         </small>
       </div>
 
@@ -1616,7 +2237,9 @@ function DocumentUploader({
             <button
               type="button"
               className="icon-button clear-all-button"
-              onClick={onClearFiles}
+              onClick={
+                onClearFiles
+              }
             >
               Clear all
             </button>
@@ -1638,7 +2261,9 @@ function DocumentUploader({
 
                     <div>
                       <strong>
-                        {file.name}
+                        {
+                          file.name
+                        }
                       </strong>
 
                       <span>
@@ -1662,7 +2287,9 @@ function DocumentUploader({
                     type="button"
                     aria-label={`Remove ${file.name}`}
                   >
-                    <X size={18} />
+                    <X
+                      size={18}
+                    />
                   </button>
                 </div>
               )
@@ -1671,13 +2298,38 @@ function DocumentUploader({
         </div>
       )}
 
+      <label className="consent-box">
+        <input
+          type="checkbox"
+          checked={consent}
+          onChange={(event) =>
+            onConsentChange(
+              event.target.checked
+            )
+          }
+        />
+
+        <span>
+          <strong>
+            Consent confirmation
+          </strong>
+
+          {role === "client"
+            ? "I consent to these test documents being processed for this prototype onboarding workflow."
+            : "I confirm that client consent has been obtained before processing this document pack."}
+        </span>
+      </label>
+
       <button
         className="primary-button"
         disabled={
           files.length === 0 ||
-          loading
+          loading ||
+          !consent
         }
-        onClick={onProcess}
+        onClick={
+          onProcess
+        }
       >
         {loading ? (
           <>
@@ -1707,6 +2359,7 @@ function DocumentUploader({
   );
 }
 
+
 function ProcessingCard({
   stages,
   stageOrder,
@@ -1717,7 +2370,8 @@ function ProcessingCard({
     key: string;
     label: string;
   }[];
-  stageOrder: ProcessingStage[];
+  stageOrder:
+    ProcessingStage[];
   stage: ProcessingStage;
   currentStageIndex: number;
 }) {
@@ -1734,8 +2388,9 @@ function ProcessingCard({
           </h2>
 
           <p>
-            Follow the document pack through
-            the onboarding pipeline.
+            Follow the document pack
+            through the onboarding
+            pipeline.
           </p>
         </div>
       </div>
@@ -1816,6 +2471,320 @@ function ProcessingCard({
   );
 }
 
+
+function CaseQueue({
+  cases,
+  loading,
+  activeCaseId,
+  onOpen,
+  onRefresh,
+}: {
+  cases: CaseSummary[];
+  loading: boolean;
+  activeCaseId:
+    | string
+    | null;
+  onOpen: (
+    caseId: string
+  ) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <section className="card case-queue-card">
+      <div className="card-heading">
+        <div>
+          <span className="step-label">
+            ADVISER CASE QUEUE
+          </span>
+
+          <h2>
+            Submitted Cases
+          </h2>
+
+          <p>
+            Client cases are visible to
+            authenticated advisers. Clients
+            can only access their own cases.
+          </p>
+        </div>
+
+        <button
+          className="role-switch-button"
+          onClick={onRefresh}
+        >
+          <RefreshCcw
+            size={15}
+          />
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="empty-state">
+          <LoaderCircle
+            className="spin"
+            size={20}
+          />
+          Loading case...
+        </div>
+      ) : cases.length === 0 ? (
+        <div className="empty-state">
+          No submitted cases yet.
+        </div>
+      ) : (
+        <div className="case-list">
+          {cases.map(
+            (item) => (
+              <button
+                className={`case-row ${
+                  activeCaseId ===
+                  item.case_id
+                    ? "active"
+                    : ""
+                }`}
+                key={
+                  item.case_id
+                }
+                onClick={() =>
+                  onOpen(
+                    item.case_id
+                  )
+                }
+              >
+                <div>
+                  <strong>
+                    {
+                      item.case_id
+                    }
+                  </strong>
+                  <span>
+                    {
+                      item.owner_email
+                    }
+                  </span>
+                </div>
+
+                <div className="case-row-meta">
+                  <small>
+                    {
+                      item.document_count
+                    }{" "}
+                    docs
+                  </small>
+
+                  <StatusPill
+                    status={
+                      item.case_status
+                    }
+                  />
+                </div>
+              </button>
+            )
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+
+function CompliancePanel({
+  readiness,
+  clientView = false,
+}: {
+  readiness:
+    ComplianceReadiness;
+  clientView?: boolean;
+}) {
+  const visibleChecks =
+    clientView
+      ? readiness.checks.filter(
+          (item) =>
+            item.code.startsWith(
+              "document_"
+            ) ||
+            item.code ===
+              "consent_recorded"
+        )
+      : readiness.checks;
+
+  return (
+    <section className="card compliance-card">
+      <div className="compliance-header">
+        <div>
+          <span className="step-label">
+            COMPLIANCE READINESS
+          </span>
+
+          <h2>
+            {readiness.overall_status ===
+            "ready"
+              ? "Ready for adviser review"
+              : readiness.overall_status ===
+                  "blocked"
+                ? "Action required"
+                : "Review items detected"}
+          </h2>
+        </div>
+
+        <ReadinessBadge
+          status={
+            readiness.overall_status
+          }
+        />
+      </div>
+
+      <div className="readiness-stats">
+        <div>
+          <strong>
+            {
+              readiness.blocking_count
+            }
+          </strong>
+          <span>
+            blocking
+          </span>
+        </div>
+
+        <div>
+          <strong>
+            {
+              readiness.warning_count
+            }
+          </strong>
+          <span>
+            warnings
+          </span>
+        </div>
+      </div>
+
+      <div className="compliance-checks">
+        {visibleChecks.map(
+          (item) => (
+            <div
+              className={`compliance-check ${item.severity}`}
+              key={
+                item.code
+              }
+            >
+              <div className="compliance-check-icon">
+                {item.status ===
+                "pass" ? (
+                  <CheckCircle2
+                    size={18}
+                  />
+                ) : (
+                  <AlertTriangle
+                    size={18}
+                  />
+                )}
+              </div>
+
+              <div>
+                <strong>
+                  {
+                    item.label
+                  }
+                </strong>
+                <span>
+                  {
+                    item.message
+                  }
+                </span>
+              </div>
+            </div>
+          )
+        )}
+      </div>
+
+      <p className="compliance-disclaimer">
+        {readiness.disclaimer}
+      </p>
+    </section>
+  );
+}
+
+
+function AuditTrail({
+  events,
+}: {
+  events: AuditEvent[];
+}) {
+  return (
+    <section className="card audit-card">
+      <div className="card-heading">
+        <div>
+          <span className="step-label">
+            AUDIT TRAIL
+          </span>
+
+          <h2>
+            Case Activity
+          </h2>
+
+          <p>
+            Actions are logged without
+            storing document contents in
+            the audit event.
+          </p>
+        </div>
+
+        <History
+          className="heading-icon"
+          size={27}
+        />
+      </div>
+
+      {events.length === 0 ? (
+        <div className="empty-state">
+          No audit events available.
+        </div>
+      ) : (
+        <div className="audit-list">
+          {events.map(
+            (
+              event,
+              index
+            ) => (
+              <div
+                className="audit-row"
+                key={`${event.timestamp}-${index}`}
+              >
+                <div className="audit-dot" />
+
+                <div>
+                  <strong>
+                    {
+                      event.action
+                    }
+                  </strong>
+
+                  <span>
+                    {
+                      event.description
+                    }
+                  </span>
+
+                  <small>
+                    {
+                      event.actor_email
+                    }{" "}
+                    ·{" "}
+                    {formatDate(
+                      event.timestamp
+                    )}
+                  </small>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+
 function EditableReviewField({
   label,
   value,
@@ -1833,12 +2802,16 @@ function EditableReviewField({
 }) {
   return (
     <label className="review-field editable-review-field">
-      <span>{label}</span>
+      <span>
+        {label}
+      </span>
 
       <input
         type={type}
         value={value}
-        placeholder={placeholder}
+        placeholder={
+          placeholder
+        }
         min={
           type === "number"
             ? 0
@@ -1859,6 +2832,67 @@ function EditableReviewField({
   );
 }
 
+
+function StatusPill({
+  status,
+}: {
+  status: string;
+}) {
+  const normalized =
+    status
+      .toLowerCase()
+      .replaceAll("_", "-");
+
+  return (
+    <span
+      className={`status-pill ${normalized}`}
+    >
+      {status.replaceAll(
+        "_",
+        " "
+      )}
+    </span>
+  );
+}
+
+
+function ReadinessBadge({
+  status,
+}: {
+  status:
+    | "ready"
+    | "review"
+    | "blocked";
+}) {
+  return (
+    <span
+      className={`readiness-badge ${status}`}
+    >
+      <ClipboardCheck
+        size={15}
+      />
+      {status}
+    </span>
+  );
+}
+
+
+function ErrorMessage({
+  message,
+}: {
+  message: string;
+}) {
+  return (
+    <div className="error-message">
+      <AlertTriangle
+        size={18}
+      />
+      {message}
+    </div>
+  );
+}
+
+
 function SummaryCard({
   label,
   value,
@@ -1871,13 +2905,20 @@ function SummaryCard({
   return (
     <div
       className={`summary-card ${
-        featured ? "featured" : ""
+        featured
+          ? "featured"
+          : ""
       }`}
     >
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span>
+        {label}
+      </span>
+      <strong>
+        {value}
+      </strong>
     </div>
   );
 }
+
 
 export default App;
