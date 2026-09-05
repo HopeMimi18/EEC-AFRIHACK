@@ -1,5 +1,6 @@
 import base64
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -16,25 +17,59 @@ from app.schemas import (
 )
 
 
+# ---------------------------------------------------------
+# Environment configuration
+# ---------------------------------------------------------
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+ENV_PATH = BASE_DIR / ".env"
+
+load_dotenv(
+    dotenv_path=ENV_PATH,
+    override=True,
+)
 
 DEMO_MODE = (
-    os.getenv("DEMO_MODE", "false")
+    os.getenv("DEMO_MODE", "true")
     .strip()
     .lower()
     == "true"
 )
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
-
 MODEL = os.getenv(
     "OPENAI_MODEL",
-    "gpt-4o-2024-08-06"
+    "gpt-4o-2024-08-06",
 )
 
+
+# ---------------------------------------------------------
+# Optional OpenAI client
+# ---------------------------------------------------------
+
+def get_openai_client():
+    """
+    Create the OpenAI client only when live extraction
+    is explicitly being used.
+
+    Demo Mode does not require an API key.
+    """
+
+    api_key = os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is required for live extraction. "
+            "Set DEMO_MODE=true to use the mock extraction workflow."
+        )
+
+    return OpenAI(
+        api_key=api_key
+    )
+
+
+# ---------------------------------------------------------
+# Extraction instructions
+# ---------------------------------------------------------
 
 SYSTEM_PROMPT = """
 You are a financial document extraction system.
@@ -64,11 +99,19 @@ Rules:
 """
 
 
+# ---------------------------------------------------------
+# Live image extraction
+# ---------------------------------------------------------
+
 def parse_image_document(
     filename: str,
     content_type: str,
     file_bytes: bytes,
 ) -> FNADataPayload:
+
+    # The OpenAI client is created ONLY here.
+    # Demo Mode never reaches this function.
+    client = get_openai_client()
 
     encoded_image = base64.b64encode(
         file_bytes
@@ -91,7 +134,7 @@ def parse_image_document(
                     {
                         "type": "input_text",
                         "text": (
-                            f"Extract financial information "
+                            "Extract financial information "
                             f"from {filename}."
                         ),
                     },
@@ -114,10 +157,18 @@ def parse_image_document(
     return response.output_parsed
 
 
+# ---------------------------------------------------------
+# Live PDF extraction
+# ---------------------------------------------------------
+
 def parse_pdf_document(
     filename: str,
     file_bytes: bytes,
 ) -> FNADataPayload:
+
+    # The OpenAI client is created ONLY here.
+    # Demo Mode never reaches this function.
+    client = get_openai_client()
 
     uploaded_file_id = None
 
@@ -167,15 +218,23 @@ def parse_pdf_document(
     finally:
         if uploaded_file_id:
             try:
-                client.files.delete(uploaded_file_id)
+                client.files.delete(
+                    uploaded_file_id
+                )
             except Exception:
                 pass
 
+
+# ---------------------------------------------------------
+# Hackathon Demo / Mock extraction
+# ---------------------------------------------------------
+
 def build_demo_fna_payload() -> FNADataPayload:
     """
-    Return synthetic financial information for hackathon
-    demonstrations.
+    Return synthetic financial information for
+    hackathon demonstrations.
 
+    IMPORTANT:
     This data is NOT extracted from the uploaded document.
     """
 
@@ -282,16 +341,32 @@ def build_demo_fna_payload() -> FNADataPayload:
         ),
     )
 
+
+# ---------------------------------------------------------
+# Main document parser
+# ---------------------------------------------------------
+
 def parse_financial_document(
-
-
     filename: str,
     content_type: str,
     file_bytes: bytes,
 ) -> FNADataPayload:
+    """
+    Parse a financial document.
+
+    Demo Mode:
+        Returns synthetic FNA data and does NOT
+        connect to OpenAI.
+
+    Live Mode:
+        Uses the configured OpenAI API.
+    """
+
+    # IMPORTANT:
+    # Always check Demo Mode before doing anything
+    # involving the external API.
     if DEMO_MODE:
         return build_demo_fna_payload()
-    
 
     if content_type == "application/pdf":
         return parse_pdf_document(
