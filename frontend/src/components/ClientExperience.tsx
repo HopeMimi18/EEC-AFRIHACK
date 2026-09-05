@@ -1442,8 +1442,8 @@ function DocumentsPage({
             </span>
 
             <small>
-              PDF, PNG, JPG or JPEG ·
-              Maximum 5 · 10 MB each
+              PDF, PNG, JPG or JPEG |
+              Maximum 5 | 10 MB each
             </small>
           </div>
 
@@ -1718,7 +1718,7 @@ function MessageDrawer({
           <CaseChat
             session={session}
             caseId={caseId}
-            title="Client ↔ Adviser"
+            title="Client / Adviser"
             compact
           />
         </div>

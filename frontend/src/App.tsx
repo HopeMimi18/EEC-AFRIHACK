@@ -1032,7 +1032,7 @@ function App() {
 
                   <div>
                     <strong>
-                      DEMO MODE â€”
+                      DEMO MODE -
                       Synthetic Data
                     </strong>
 
@@ -1110,7 +1110,7 @@ function App() {
                   caseId={
                     result.case_id
                   }
-                  title="Client â†” Adviser"
+                  title="Client / Adviser"
                 />
               </section>
 
@@ -1517,7 +1517,7 @@ function RoleLanding({
             </p>
 
             <strong>
-              Client Sign In â†’
+              Client Sign In 
             </strong>
           </button>
 
@@ -1551,7 +1551,7 @@ function RoleLanding({
             </p>
 
             <strong>
-              Adviser Sign In â†’
+              Adviser Sign In 
             </strong>
           </button>
         </div>
@@ -1763,7 +1763,7 @@ function LoginScreen({
           href="/emergency.html"
         >
           <AlertTriangle size={17} />
-          Emergency Access â€” no sign-in required
+          Emergency Access - No sign-in required
         </a>
         <div className="demo-credentials">
           <strong>
@@ -1891,8 +1891,8 @@ function DocumentUploader({
         </span>
 
         <small>
-          PDF, PNG, JPG or JPEG Â·
-          Max 5 documents Â· 10 MB each
+          PDF, PNG, JPG or JPEG |
+          Max 5 documents | 10 MB each
         </small>
       </div>
 
@@ -2445,7 +2445,7 @@ function AuditTrail({
                     {
                       event.actor_email
                     }{" "}
-                    Â·{" "}
+                    |{" "}
                     {formatDate(
                       event.timestamp
                     )}

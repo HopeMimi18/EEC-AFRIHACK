@@ -15,7 +15,8 @@ foreach ($path in @($appPath, $cssPath, $indexPath)) {
   }
 }
 
-$app = Get-Content $appPath -Raw
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+$app = [System.IO.File]::ReadAllText($appPath, [System.Text.Encoding]::UTF8)
 
 # Register the offline emergency service worker from the React app in production.
 if ($app -notmatch 'emergency-sw\.js') {
@@ -97,9 +98,9 @@ if ($app -notmatch 'login-emergency-link') {
   $app = $app.Replace($loginAnchor, $loginFeature + $loginAnchor)
 }
 
-Set-Content $appPath $app -Encoding UTF8
+[System.IO.File]::WriteAllText($appPath, $app, $utf8)
 
-$css = Get-Content $cssPath -Raw
+$css = [System.IO.File]::ReadAllText($cssPath, [System.Text.Encoding]::UTF8)
 if ($css -notmatch 'BONUS: Public offline emergency access') {
   $css += @'
 
@@ -194,17 +195,17 @@ if ($css -notmatch 'BONUS: Public offline emergency access') {
   }
 }
 '@
-  Set-Content $cssPath $css -Encoding UTF8
+  [System.IO.File]::WriteAllText($cssPath, $css, $utf8)
 }
 
-$index = Get-Content $indexPath -Raw
+$index = [System.IO.File]::ReadAllText($indexPath, [System.Text.Encoding]::UTF8)
 if ($index -notmatch 'manifest\.webmanifest') {
   $manifestMarkup = @'
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0b1d2a" />
 '@
   $index = $index.Replace("  </head>", $manifestMarkup + "`r`n  </head>")
-  Set-Content $indexPath $index -Encoding UTF8
+  [System.IO.File]::WriteAllText($indexPath, $index, $utf8)
 }
 
 Write-Host ""
