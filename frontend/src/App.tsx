@@ -48,7 +48,7 @@ import {
 } from "./lib/api";
 
 import "./App.css";
-
+import ClientExperience from "./components/ClientExperience";
 
 type ProcessingStage =
   | "idle"
@@ -772,49 +772,32 @@ function App() {
     );
   }
 
-  if (
-    session.user.role ===
-    "client"
-  ) {
-    return (
-      <ClientPortal
-        session={session}
-        files={files}
-        result={result}
-        loading={loading}
-        error={error}
-        stage={stage}
-        dragActive={dragActive}
-        checklist={checklist}
-        consent={consent}
-        fileInputRef={
-          fileInputRef
-        }
-        onAddFiles={
-          addFiles
-        }
-        onRemoveFile={
-          removeFile
-        }
-        onClearFiles={
-          clearFiles
-        }
-        onProcess={
-          handleProcess
-        }
-        onDragActive={
-          setDragActive
-        }
-        onConsentChange={
-          setConsent
-        }
-        onLogout={
-          handleLogout
-        }
-      />
-    );
-  }
-
+ if (
+  session.user.role ===
+  "client"
+) {
+  return (
+    <ClientExperience
+      session={session}
+      files={files}
+      result={result}
+      loading={loading}
+      error={error}
+      stage={stage}
+      dragActive={dragActive}
+      checklist={checklist}
+      consent={consent}
+      fileInputRef={fileInputRef}
+      onAddFiles={addFiles}
+      onRemoveFile={removeFile}
+      onClearFiles={clearFiles}
+      onProcess={handleProcess}
+      onDragActive={setDragActive}
+      onConsentChange={setConsent}
+      onLogout={handleLogout}
+    />
+  );
+}
   return (
     <div className="portal-shell">
       <aside className="sidebar">
@@ -1729,384 +1712,6 @@ function LoginScreen({
           />
         )}
       </div>
-    </div>
-  );
-}
-
-
-function ClientPortal({
-  session,
-  files,
-  result,
-  loading,
-  error,
-  stage,
-  dragActive,
-  checklist,
-  consent,
-  fileInputRef,
-  onAddFiles,
-  onRemoveFile,
-  onClearFiles,
-  onProcess,
-  onDragActive,
-  onConsentChange,
-  onLogout,
-}: {
-  session: AuthSession;
-  files: File[];
-  result:
-    | ProcessDocumentsResponse
-    | null;
-  loading: boolean;
-  error: string | null;
-  stage: ProcessingStage;
-  dragActive: boolean;
-  checklist: {
-    key: ChecklistKey;
-    label: string;
-    hints: string[];
-    matched: boolean;
-  }[];
-  consent: boolean;
-  fileInputRef:
-    RefObject<HTMLInputElement | null>;
-  onAddFiles: (
-    files: File[]
-  ) => void;
-  onRemoveFile: (
-    index: number
-  ) => void;
-  onClearFiles: () => void;
-  onProcess: () => void;
-  onDragActive: (
-    active: boolean
-  ) => void;
-  onConsentChange: (
-    value: boolean
-  ) => void;
-  onLogout: () => void;
-}) {
-  const submitted =
-    stage === "complete" &&
-    result !== null;
-
-  return (
-    <div className="client-shell">
-      <header className="client-nav">
-        <div className="landing-brand">
-          <div className="brand-mark">
-            RS
-          </div>
-
-          <div>
-            <strong>
-              Royal Square
-            </strong>
-            <span>
-              Client Portal
-            </span>
-          </div>
-        </div>
-
-        <div className="topbar-actions">
-          <span className="client-role-badge">
-            CLIENT
-          </span>
-
-          <span className="signed-in-user">
-            {
-              session.user.email
-            }
-          </span>
-
-          <button
-            className="role-switch-button"
-            onClick={onLogout}
-          >
-            <LogOut
-              size={16}
-            />
-            Sign out
-          </button>
-        </div>
-      </header>
-
-      <main className="client-main">
-        <section className="client-hero">
-          <span className="step-label">
-            FINANCIAL ONBOARDING
-          </span>
-
-          <h1>
-            Submit your document pack
-          </h1>
-
-          <p>
-            Upload the documents requested
-            by your adviser. Only an
-            authenticated adviser can
-            finalise or download the FNA
-            workbook.
-          </p>
-        </section>
-
-        <section className="client-safety-note">
-          <ShieldCheck
-            size={19}
-          />
-
-          <div>
-            <strong>
-              Prototype privacy notice
-            </strong>
-
-            <span>
-              Use synthetic or test
-              documents only. Do not upload
-              real personal or financial
-              information during the
-              hackathon demonstration.
-            </span>
-          </div>
-        </section>
-
-        {result?.extraction_mode ===
-          "demo" && (
-          <section className="demo-banner">
-            <div className="demo-icon">
-              <Landmark
-                size={20}
-              />
-            </div>
-
-            <div>
-              <strong>
-                DEMO MODE —
-                Synthetic Data
-              </strong>
-
-              <p>
-                {
-                  result.demo_warning
-                }
-              </p>
-            </div>
-          </section>
-        )}
-
-        <div className="client-workspace">
-          <section className="card">
-            <div className="card-heading">
-              <div>
-                <span className="step-label">
-                  DOCUMENTS
-                </span>
-
-                <h2>
-                  Client Document Pack
-                </h2>
-
-                <p>
-                  Up to five supported
-                  documents, maximum 10 MB
-                  each.
-                </p>
-              </div>
-
-              <Upload
-                className="heading-icon"
-                size={28}
-              />
-            </div>
-
-            <DocumentUploader
-              files={files}
-              loading={loading}
-              dragActive={
-                dragActive
-              }
-              fileInputRef={
-                fileInputRef
-              }
-              consent={consent}
-              role="client"
-              processLabel="Submit"
-              onAddFiles={
-                onAddFiles
-              }
-              onRemoveFile={
-                onRemoveFile
-              }
-              onClearFiles={
-                onClearFiles
-              }
-              onProcess={
-                onProcess
-              }
-              onDragActive={
-                onDragActive
-              }
-              onConsentChange={
-                onConsentChange
-              }
-            />
-
-            {error && (
-              <ErrorMessage
-                message={error}
-              />
-            )}
-          </section>
-
-          <section className="card checklist-card">
-            <div className="card-heading">
-              <div>
-                <span className="step-label">
-                  CHECKLIST
-                </span>
-
-                <h2>
-                  Requested Documents
-                </h2>
-
-                <p>
-                  Filename matching supports
-                  the prototype readiness
-                  check.
-                </p>
-              </div>
-
-              <FileCheck2
-                className="heading-icon"
-                size={28}
-              />
-            </div>
-
-            <div className="client-checklist">
-              {checklist.map(
-                (item) => (
-                  <div
-                    className={`checklist-row ${
-                      item.matched
-                        ? "matched"
-                        : ""
-                    }`}
-                    key={
-                      item.key
-                    }
-                  >
-                    <div className="checklist-status">
-                      {item.matched ? (
-                        <CheckCircle2
-                          size={18}
-                        />
-                      ) : (
-                        <span />
-                      )}
-                    </div>
-
-                    <strong>
-                      {
-                        item.label
-                      }
-                    </strong>
-
-                    <small>
-                      {item.matched
-                        ? "Added"
-                        : "Not added"}
-                    </small>
-                  </div>
-                )
-              )}
-            </div>
-
-            <div className="checklist-count">
-              <strong>
-                {files.length} / 5
-              </strong>
-              <span>
-                documents selected
-              </span>
-            </div>
-          </section>
-        </div>
-
-        {loading && (
-          <section className="client-progress-card">
-            <LoaderCircle
-              className="spin"
-              size={22}
-            />
-
-            <div>
-              <strong>
-                Preparing your
-                submission
-              </strong>
-
-              <span>
-                Authentication, file
-                validation and case checks
-                are running.
-              </span>
-            </div>
-          </section>
-        )}
-
-        {submitted && result && (
-          <>
-            <section className="client-submission-success">
-              <div className="success-icon-large">
-                <CheckCircle2
-                  size={34}
-                />
-              </div>
-
-              <div>
-                <span className="step-label">
-                  CASE SUBMITTED
-                </span>
-
-                <h2>
-                  Your documents are ready
-                  for adviser review
-                </h2>
-
-                <p>
-                  Case{" "}
-                  <strong>
-                    {
-                      result.case_id
-                    }
-                  </strong>{" "}
-                  contains{" "}
-                  {
-                    result.document_count
-                  }{" "}
-                  document(s). The adviser
-                  must sign in separately
-                  to review and finalise it.
-                </p>
-              </div>
-
-              <StatusPill
-                status={
-                  result.case_status
-                }
-              />
-            </section>
-
-            <CompliancePanel
-              readiness={
-                result.compliance_readiness
-              }
-              clientView
-            />
-          </>
-        )}
-      </main>
     </div>
   );
 }
