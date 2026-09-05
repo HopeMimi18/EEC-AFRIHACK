@@ -4,10 +4,27 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from app.schemas import FNADataPayload
+from app.schemas import (
+    AssetItem,
+    Assets,
+    ClientDemographics,
+    ExpenseItem,
+    FNADataPayload,
+    HouseholdExpenses,
+    LiabilityItem,
+    Liabilities,
+)
+
 
 
 load_dotenv()
+
+DEMO_MODE = (
+    os.getenv("DEMO_MODE", "false")
+    .strip()
+    .lower()
+    == "true"
+)
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
@@ -154,12 +171,127 @@ def parse_pdf_document(
             except Exception:
                 pass
 
+def build_demo_fna_payload() -> FNADataPayload:
+    """
+    Return synthetic financial information for hackathon
+    demonstrations.
+
+    This data is NOT extracted from the uploaded document.
+    """
+
+    return FNADataPayload(
+        client_demographics=ClientDemographics(
+            full_name="Thando Mokoena",
+            id_number=None,
+            tax_number="9876543210",
+            marital_status="Single",
+            employer="Ubuntu Digital Services",
+            gross_monthly_income=42000,
+            net_monthly_income=31500,
+        ),
+
+        assets=Assets(
+            properties=[
+                AssetItem(
+                    description="Primary Residence",
+                    current_value=1500000,
+                    institution=None,
+                )
+            ],
+
+            vehicles=[
+                AssetItem(
+                    description="2022 Demo Vehicle",
+                    current_value=280000,
+                    institution=None,
+                )
+            ],
+
+            savings=[
+                AssetItem(
+                    description="Savings Account",
+                    current_value=120000,
+                    institution="Demo Bank",
+                )
+            ],
+
+            unit_trusts=[
+                AssetItem(
+                    description="Investment Portfolio",
+                    current_value=250000,
+                    institution="Demo Investment",
+                )
+            ],
+        ),
+
+        liabilities=Liabilities(
+            mortgages=[
+                LiabilityItem(
+                    description="Home Loan",
+                    outstanding_balance=950000,
+                    monthly_instalment=10500,
+                    institution="Demo Bank",
+                )
+            ],
+
+            vehicle_finance=[
+                LiabilityItem(
+                    description="Vehicle Finance",
+                    outstanding_balance=180000,
+                    monthly_instalment=6500,
+                    institution="Demo Bank",
+                )
+            ],
+
+            personal_loans=[],
+
+            credit_cards=[
+                LiabilityItem(
+                    description="Credit Card",
+                    outstanding_balance=15000,
+                    monthly_instalment=1000,
+                    institution="Demo Bank",
+                )
+            ],
+        ),
+
+        household_expenses=HouseholdExpenses(
+            fixed_expenses=[
+                ExpenseItem(
+                    description="Rental Payment",
+                    monthly_amount=5000,
+                ),
+
+                ExpenseItem(
+                    description="Car Insurance",
+                    monthly_amount=1500,
+                ),
+            ],
+
+            variable_expenses=[
+                ExpenseItem(
+                    description="Groceries",
+                    monthly_amount=4500,
+                ),
+
+                ExpenseItem(
+                    description="Petrol",
+                    monthly_amount=2500,
+                ),
+            ],
+        ),
+    )
 
 def parse_financial_document(
+
+
     filename: str,
     content_type: str,
     file_bytes: bytes,
 ) -> FNADataPayload:
+    if DEMO_MODE:
+        return build_demo_fna_payload()
+    
 
     if content_type == "application/pdf":
         return parse_pdf_document(
