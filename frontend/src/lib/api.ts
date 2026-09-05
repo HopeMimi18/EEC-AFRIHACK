@@ -12,6 +12,18 @@ export interface ClientDemographics {
   net_monthly_income: number | null;
 }
 
+export interface UploadedDocument {
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+}
+
+export interface ProcessDocumentsResponse
+  extends ProcessDocumentResponse {
+  document_count: number;
+  uploaded_documents: UploadedDocument[];
+}
+
 export interface AssetItem {
   description: string;
   current_value: number;
@@ -39,6 +51,8 @@ export interface FnaData {
     savings: AssetItem[];
     unit_trusts: AssetItem[];
   };
+
+  
 
   liabilities: {
     mortgages: LiabilityItem[];
@@ -89,6 +103,43 @@ export async function processDocument(
 
   if (!response.ok) {
     let message = "Document processing failed.";
+
+    try {
+      const error = await response.json();
+
+      if (error.detail) {
+        message = error.detail;
+      }
+    } catch {
+      // Keep default message.
+    }
+
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function processDocuments(
+  files: File[]
+): Promise<ProcessDocumentsResponse> {
+  const formData = new FormData();
+
+  files.forEach((file) => {
+    formData.append("files", file);
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/process-documents`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (!response.ok) {
+    let message =
+      "Document pack processing failed.";
 
     try {
       const error = await response.json();

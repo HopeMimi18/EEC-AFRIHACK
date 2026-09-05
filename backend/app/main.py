@@ -5,7 +5,9 @@ from fastapi.responses import FileResponse
 
 from app.document_parser import DEMO_MODE, parse_financial_document
 from app.excel_populator import populate_fna_workbook
+from app.schemas import FNADataPayload
 from fastapi.middleware.cors import CORSMiddleware
+
 
 # ---------------------------------------------------------
 # FastAPI application
@@ -40,6 +42,7 @@ ALLOWED_FILE_TYPES = {
 }
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_DOCUMENTS = 5
 
 
 # ---------------------------------------------------------
@@ -319,3 +322,216 @@ async def download_processed_fna(
             "spreadsheetml.sheet"
         ),
     )
+
+@app.post("/api/v1/process-documents")
+async def process_documents(
+    files: list[UploadFile],
+):
+    """
+    Process multiple client documents as one onboarding case.
+
+    Demo Mode uses synthetic FNA data while preserving
+    the real multi-document upload workflow.
+    """
+
+    if not files:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one document is required.",
+        )
+
+    if len(files) > MAX_DOCUMENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"A maximum of {MAX_DOCUMENTS} "
+                "documents may be uploaded."
+            ),
+        )
+
+    validated_documents = []
+
+    for file in files:
+        content_type = file.content_type or ""
+
+        if content_type not in ALLOWED_FILE_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    f"Unsupported file type for "
+                    f"{file.filename}. "
+                    "Use PDF, PNG, JPG or JPEG."
+                ),
+            )
+
+        file_data = await file.read()
+
+        if not file_data:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{file.filename} is empty."
+                ),
+            )
+
+        if len(file_data) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"{file.filename} exceeds "
+                    "the 10 MB upload limit."
+                ),
+            )
+
+        validated_documents.append(
+            {
+                "filename": (
+                    file.filename or "document"
+                ),
+                "content_type": content_type,
+                "file_bytes": file_data,
+                "size_bytes": len(file_data),
+            }
+        )
+
+    try:
+        # -------------------------------------------------
+        # Demo Mode
+        # -------------------------------------------------
+
+        if DEMO_MODE:
+            first_document = validated_documents[0]
+
+            extracted_data = parse_financial_document(
+                filename=first_document["filename"],
+                content_type=first_document[
+                    "content_type"
+                ],
+                file_bytes=first_document[
+                    "file_bytes"
+                ],
+            )
+
+        else:
+            raise HTTPException(
+                status_code=501,
+                detail=(
+                    "Live multi-document extraction "
+                    "is not enabled in this prototype. "
+                    "Use DEMO_MODE=true."
+                ),
+            )
+
+        # -------------------------------------------------
+        # Generate FNA
+        # -------------------------------------------------
+
+        output_path, summary = (
+            populate_fna_workbook(
+                extracted_data
+            )
+        )
+
+        return {
+            "status": "success",
+            "extraction_mode": "demo",
+
+            "demo_warning": (
+                "Synthetic demonstration data was used. "
+                "Values were not extracted from the "
+                "uploaded documents."
+            ),
+
+            "document_count": len(
+                validated_documents
+            ),
+
+            "uploaded_documents": [
+                {
+                    "filename": document[
+                        "filename"
+                    ],
+                    "content_type": document[
+                        "content_type"
+                    ],
+                    "size_bytes": document[
+                        "size_bytes"
+                    ],
+                }
+                for document
+                in validated_documents
+            ],
+
+            "extracted_data": (
+                extracted_data.model_dump(
+                    mode="json"
+                )
+            ),
+
+            "summary": summary,
+
+            "processed_filename": (
+                output_path.name
+            ),
+
+            "download_url": (
+                f"/api/v1/download/"
+                f"{output_path.name}"
+            ),
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Multi-document processing "
+                f"failed: {error}"
+            ),
+        )
+
+# ---------------------------------------------------------
+# Adviser verification + final FNA generation
+# ---------------------------------------------------------
+
+@app.post("/api/v1/finalise-fna")
+async def finalise_fna(
+    payload: FNADataPayload,
+):
+    """
+    Validate adviser-reviewed FNA data and generate a final workbook.
+
+    The browser sends the complete structured FNA payload after the
+    adviser has reviewed/corrected the extracted values. Pydantic
+    validates the payload before the workbook is generated.
+    """
+
+    try:
+        output_path, summary = populate_fna_workbook(
+            payload
+        )
+
+        return {
+            "status": "success",
+            "verification_status": "adviser_verified",
+            "extracted_data": payload.model_dump(
+                mode="json"
+            ),
+            "summary": summary,
+            "processed_filename": output_path.name,
+            "download_url": (
+                f"/api/v1/download/"
+                f"{output_path.name}"
+            ),
+        }
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Final FNA generation failed: "
+                f"{error}"
+            ),
+        )
