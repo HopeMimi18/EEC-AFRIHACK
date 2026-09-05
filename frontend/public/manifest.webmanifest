@@ -1,0 +1,33 @@
+{
+  "name": "Royal Square Financial Portal",
+  "short_name": "Royal Square",
+  "description": "Royal Square financial onboarding portal with public offline emergency access.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1d2a",
+  "theme_color": "#0b1d2a",
+  "icons": [
+    {
+      "src": "/emergency-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Emergency Access",
+      "short_name": "Emergency",
+      "description": "Open emergency contacts without signing in.",
+      "url": "/emergency.html",
+      "icons": [
+        {
+          "src": "/emergency-icon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ]
+}

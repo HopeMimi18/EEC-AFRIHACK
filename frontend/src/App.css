@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --navy: #0b1d2a;
   --navy-soft: #122b3c;
   --teal: #197b77;
@@ -1785,5 +1785,96 @@ button.download-button {
   .signed-in-user {
     width: 100%;
     text-align: right;
+  }
+}
+
+/* -------------------------------------------------------
+   BONUS: Public offline emergency access
+------------------------------------------------------- */
+
+.public-emergency-access {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(215, 181, 109, 0.28);
+  border-radius: 16px;
+  background: rgba(181, 138, 66, 0.1);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.public-emergency-access > div {
+  min-width: 0;
+}
+
+.public-emergency-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #d7b56d;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.public-emergency-access strong {
+  display: block;
+  font-size: 17px;
+}
+
+.public-emergency-access p {
+  margin: 5px 0 0;
+  color: #b9c6cc;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.public-emergency-button,
+.login-emergency-link {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 11px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.public-emergency-button {
+  flex: 0 0 auto;
+  padding: 0 16px;
+  background: #b58a42;
+  color: #0b1d2a;
+  font-size: 11px;
+}
+
+.public-emergency-button:hover {
+  background: #d7b56d;
+}
+
+.login-emergency-link {
+  width: 100%;
+  margin-top: 16px;
+  padding: 0 14px;
+  border: 1px solid rgba(164, 68, 68, 0.22);
+  background: rgba(164, 68, 68, 0.06);
+  color: #8c3535;
+  font-size: 12px;
+}
+
+.login-emergency-link:hover {
+  background: rgba(164, 68, 68, 0.1);
+}
+
+@media (max-width: 720px) {
+  .public-emergency-access {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .public-emergency-button {
+    width: 100%;
   }
 }

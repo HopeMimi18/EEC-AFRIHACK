@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1d2a" />
+    <title>Royal Square Emergency Access</title>
+    <style>
+      :root {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #182428;
+        background: #f3f5f4;
+        --navy: #0b1d2a;
+        --navy-soft: #122b3c;
+        --teal: #197b77;
+        --gold: #b58a42;
+        --surface: #ffffff;
+        --muted: #68777d;
+        --border: #dfe5e3;
+        --danger: #a44444;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f3f5f4; color: #182428; }
+      button, input, a { font: inherit; }
+      a { text-decoration: none; }
+
+      .shell {
+        min-height: 100vh;
+        padding: 24px;
+        background:
+          radial-gradient(circle at 85% 10%, rgba(25, 123, 119, 0.18), transparent 30%),
+          var(--navy);
+      }
+
+      .wrap { width: min(860px, 100%); margin: 0 auto; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+      .brand { display: flex; align-items: center; gap: 12px; color: white; }
+      .brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 11px; background: linear-gradient(135deg, var(--gold), #d7b56d); color: var(--navy); font-weight: 900; }
+      .brand strong { display: block; font-size: 17px; }
+      .brand span { display: block; margin-top: 3px; color: #a8b8bf; font-size: 12px; }
+
+      .hero { color: white; margin-bottom: 24px; }
+      .eyebrow { color: #d7b56d; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; }
+      h1 { margin: 8px 0 10px; font-size: clamp(32px, 7vw, 52px); line-height: 1.04; letter-spacing: -1.6px; }
+      .hero p { max-width: 680px; margin: 0; color: #b9c6cc; line-height: 1.7; }
+
+      .panel { background: var(--surface); border-radius: 22px; padding: 22px; box-shadow: 0 24px 70px rgba(0,0,0,.2); }
+      .panel-title { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+      .panel-title h2 { margin: 0; color: var(--navy); font-size: 22px; }
+      .panel-title p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+      .no-login { flex: 0 0 auto; padding: 7px 9px; border-radius: 999px; background: #e9f4f2; color: var(--teal); font-size: 11px; font-weight: 800; }
+
+      .contacts { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+      .contact { border: 1px solid var(--border); border-radius: 16px; padding: 16px; display: grid; gap: 12px; }
+      .contact-number { color: var(--navy); font-size: 30px; font-weight: 900; letter-spacing: -1px; }
+      .contact h3 { margin: 0; color: var(--navy); font-size: 16px; }
+      .contact p { margin: 0; min-height: 42px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+      .call-button { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 11px; background: var(--navy); color: white; font-weight: 800; }
+      .call-button:hover { background: var(--navy-soft); }
+
+      .ice { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+      .ice h2 { margin: 0; color: var(--navy); font-size: 19px; }
+      .ice > p { margin: 6px 0 14px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+      .ice-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+      label span { display: block; margin-bottom: 6px; color: var(--navy); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; }
+      input { width: 100%; min-height: 46px; border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; outline: none; background: #fbfcfc; color: var(--navy); font-size: 16px; }
+      input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(25,123,119,.08); }
+      .save-button, .clear-button { min-height: 46px; border: 0; border-radius: 10px; padding: 0 16px; cursor: pointer; font-weight: 800; }
+      .save-button { background: var(--teal); color: white; }
+      .clear-button { background: #eef1f0; color: var(--navy); }
+      .ice-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+      .ice-call { min-height: 44px; display: none; align-items: center; justify-content: center; padding: 0 14px; border-radius: 10px; background: var(--gold); color: var(--navy); font-weight: 900; }
+      .ice-call.visible { display: inline-flex; }
+      .saved-message { align-self: center; color: var(--muted); font-size: 12px; }
+
+      .guidance { margin-top: 18px; padding: 16px; border-radius: 14px; background: #f7f1e7; color: #4d4435; }
+      .guidance strong { display: block; margin-bottom: 7px; color: var(--navy); }
+      .guidance ul { margin: 0; padding-left: 20px; font-size: 12px; line-height: 1.7; }
+
+      .footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 18px; color: #a8b8bf; font-size: 11px; }
+      .back-link { min-height: 44px; display: inline-flex; align-items: center; color: white; font-weight: 800; }
+
+      @media (max-width: 720px) {
+        .shell { padding: 18px; }
+        .topbar { align-items: flex-start; flex-direction: column; }
+        .contacts { grid-template-columns: 1fr; }
+        .contact p { min-height: 0; }
+        .ice-grid { grid-template-columns: 1fr; }
+        .panel-title { flex-direction: column; }
+        .footer { align-items: flex-start; flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="wrap">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark">RS</div>
+            <div>
+              <strong>Royal Square</strong>
+              <span>Emergency Access</span>
+            </div>
+          </div>
+          <div id="networkStatus" class="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="networkText">Checking connection…</span>
+          </div>
+        </div>
+
+        <section class="hero">
+          <span class="eyebrow">NO SIGN-IN REQUIRED</span>
+          <h1>Emergency help, even when the portal is offline.</h1>
+          <p>
+            These emergency numbers are stored with the app so they remain visible without logging in.
+            Calling still depends on the device and available mobile or telephone service.
+          </p>
+        </section>
+
+        <section class="panel" aria-labelledby="emergency-title">
+          <div class="panel-title">
+            <div>
+              <h2 id="emergency-title">South Africa emergency contacts</h2>
+              <p>Tap a number on a phone to open the device dialler.</p>
+            </div>
+            <span class="no-login">PUBLIC ACCESS</span>
+          </div>
+
+          <div class="contacts">
+            <article class="contact">
+              <div class="contact-number">112</div>
+              <div>
+                <h3>General Emergency</h3>
+                <p>National emergency access from a mobile phone.</p>
+              </div>
+              <a class="call-button" href="tel:112" aria-label="Call general emergency number 112">Call 112</a>
+            </article>
+
+            <article class="contact">
+              <div class="contact-number">10111</div>
+              <div>
+                <h3>Police Emergency</h3>
+                <p>For emergencies requiring South African Police Service assistance.</p>
+              </div>
+              <a class="call-button" href="tel:10111" aria-label="Call police emergency number 10111">Call 10111</a>
+            </article>
+
+            <article class="contact">
+              <div class="contact-number">10177</div>
+              <div>
+                <h3>Ambulance</h3>
+                <p>National ambulance emergency service number.</p>
+              </div>
+              <a class="call-button" href="tel:10177" aria-label="Call ambulance emergency number 10177">Call 10177</a>
+            </article>
+
+            <article class="contact">
+              <div class="contact-number" style="font-size: 25px;">0861 000 234</div>
+              <div>
+                <h3>Tow / Roadside Assistance</h3>
+                <p>AA South Africa roadside assistance and towing. Membership or service terms may apply.</p>
+              </div>
+              <a
+                class="call-button"
+                href="tel:0861000234"
+                aria-label="Call AA South Africa roadside assistance on 0861 000 234"
+              >
+                Call Roadside Assistance
+              </a>
+            </article>
+          </div>
+
+          <section class="ice" aria-labelledby="ice-title">
+            <h2 id="ice-title">My ICE contact</h2>
+            <p>
+              Optional. Save one trusted contact on this device only. It is not uploaded to Royal Square and does not require an account.
+            </p>
+
+            <form id="iceForm" class="ice-grid">
+              <label>
+                <span>Contact name</span>
+                <input id="iceName" type="text" maxlength="60" placeholder="e.g. Parent / Partner" autocomplete="name" />
+              </label>
+              <label>
+                <span>Phone number</span>
+                <input id="icePhone" type="tel" maxlength="30" placeholder="e.g. 082 123 4567" autocomplete="tel" />
+              </label>
+              <button class="save-button" type="submit">Save contact</button>
+            </form>
+
+            <div class="ice-actions">
+              <a id="iceCall" class="ice-call" href="#">Call saved contact</a>
+              <button id="clearIce" class="clear-button" type="button">Clear</button>
+              <span id="savedMessage" class="saved-message" aria-live="polite"></span>
+            </div>
+          </section>
+
+          <div class="guidance">
+            <strong>When calling emergency services</strong>
+            <ul>
+              <li>State where you are as clearly as possible.</li>
+              <li>Briefly describe what happened and what help is needed.</li>
+              <li>Stay on the line and follow the operator's instructions.</li>
+              <li>For roadside assistance, move to a safe place if possible and have your vehicle and location details ready.</li>
+            </ul>
+          </div>
+        </section>
+
+        <div class="footer">
+          <a class="back-link" href="/">← Back to Royal Square sign in</a>
+          <span>This screen does not send your location or automatically contact emergency services.</span>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      (() => {
+        const form = document.getElementById("iceForm");
+        const nameInput = document.getElementById("iceName");
+        const phoneInput = document.getElementById("icePhone");
+        const callLink = document.getElementById("iceCall");
+        const clearButton = document.getElementById("clearIce");
+        const savedMessage = document.getElementById("savedMessage");
+        const storageKey = "royal-square-ice-contact-v1";
+
+        function normalizePhone(value) {
+          return value.trim().replace(/[^+0-9]/g, "");
+        }
+
+        function renderIce(contact) {
+          if (!contact || !contact.phone) {
+            callLink.classList.remove("visible");
+            callLink.removeAttribute("href");
+            callLink.textContent = "Call saved contact";
+            return;
+          }
+
+          nameInput.value = contact.name || "";
+          phoneInput.value = contact.phone || "";
+          callLink.href = `tel:${normalizePhone(contact.phone)}`;
+          callLink.textContent = contact.name ? `Call ${contact.name}` : "Call saved contact";
+          callLink.classList.add("visible");
+        }
+
+        function loadIce() {
+          try {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw) return;
+            renderIce(JSON.parse(raw));
+          } catch {
+            localStorage.removeItem(storageKey);
+          }
+        }
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const name = nameInput.value.trim();
+          const phone = phoneInput.value.trim();
+          const normalized = normalizePhone(phone);
+
+          if (!name || normalized.length < 7) {
+            savedMessage.textContent = "Enter a contact name and valid phone number.";
+            return;
+          }
+
+          try {
+            const contact = { name, phone };
+            localStorage.setItem(storageKey, JSON.stringify(contact));
+            renderIce(contact);
+            savedMessage.textContent = "Saved on this device.";
+          } catch {
+            savedMessage.textContent = "This browser could not save the contact locally.";
+          }
+        });
+
+        clearButton.addEventListener("click", () => {
+          localStorage.removeItem(storageKey);
+          nameInput.value = "";
+          phoneInput.value = "";
+          savedMessage.textContent = "Saved contact cleared.";
+          renderIce(null);
+        });
+        loadIce();
+
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("/emergency-sw.js").catch(() => {});
+        }
+      })();
+    </script>
+  </body>
+</html>

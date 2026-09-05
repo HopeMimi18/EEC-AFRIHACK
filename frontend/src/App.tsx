@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useRef,
@@ -138,6 +138,16 @@ function formatDate(
 
 
 function App() {
+  useEffect(() => {
+    if (
+      import.meta.env.PROD &&
+      "serviceWorker" in navigator
+    ) {
+      void navigator.serviceWorker
+        .register("/emergency-sw.js")
+        .catch(() => undefined);
+    }
+  }, []);
   const [session, setSession] =
     useState<AuthSession | null>(
       () => loadSession()
@@ -1022,7 +1032,7 @@ function App() {
 
                   <div>
                     <strong>
-                      DEMO MODE —
+                      DEMO MODE â€”
                       Synthetic Data
                     </strong>
 
@@ -1100,7 +1110,7 @@ function App() {
                   caseId={
                     result.case_id
                   }
-                  title="Client ↔ Adviser"
+                  title="Client â†” Adviser"
                 />
               </section>
 
@@ -1507,7 +1517,7 @@ function RoleLanding({
             </p>
 
             <strong>
-              Client Sign In →
+              Client Sign In â†’
             </strong>
           </button>
 
@@ -1541,11 +1551,30 @@ function RoleLanding({
             </p>
 
             <strong>
-              Adviser Sign In →
+              Adviser Sign In â†’
             </strong>
           </button>
         </div>
 
+        <div className="public-emergency-access">
+          <div>
+            <span className="public-emergency-kicker">
+              NO ACCOUNT REQUIRED
+            </span>
+            <strong>Need urgent help?</strong>
+            <p>
+              Open South African emergency contacts and your saved ICE contact, even when the portal is offline.
+            </p>
+          </div>
+
+          <a
+            className="public-emergency-button"
+            href="/emergency.html"
+          >
+            <AlertTriangle size={18} />
+            OPEN EMERGENCY ACCESS
+          </a>
+        </div>
         <div className="landing-footnote">
           Hackathon Demo Mode: use synthetic
           or test documents only.
@@ -1729,6 +1758,13 @@ function LoginScreen({
           </button>
         </form>
 
+        <a
+          className="login-emergency-link"
+          href="/emergency.html"
+        >
+          <AlertTriangle size={17} />
+          Emergency Access â€” no sign-in required
+        </a>
         <div className="demo-credentials">
           <strong>
             Demo credentials
@@ -1855,8 +1891,8 @@ function DocumentUploader({
         </span>
 
         <small>
-          PDF, PNG, JPG or JPEG ·
-          Max 5 documents · 10 MB each
+          PDF, PNG, JPG or JPEG Â·
+          Max 5 documents Â· 10 MB each
         </small>
       </div>
 
@@ -2409,7 +2445,7 @@ function AuditTrail({
                     {
                       event.actor_email
                     }{" "}
-                    ·{" "}
+                    Â·{" "}
                     {formatDate(
                       event.timestamp
                     )}
@@ -2562,3 +2598,4 @@ function SummaryCard({
 
 
 export default App;
+
