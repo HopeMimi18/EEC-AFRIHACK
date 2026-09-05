@@ -18,7 +18,7 @@ from fastapi.middleware.cors import (
     CORSMiddleware,
 )
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.auth import (
     AuthUser,
@@ -52,10 +52,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -80,6 +77,13 @@ CASES: dict[str, dict[str, Any]] = {}
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class CaseMessageCreate(BaseModel):
+    body: str = Field(
+        min_length=1,
+        max_length=2000,
+    )
 
 
 def utc_now() -> str:
@@ -734,6 +738,7 @@ async def process_documents(
                 f"{output_path.name}"
             ),
             "verified_by": None,
+            "messages": [],
             "audit_trail": [],
         }
 
@@ -858,6 +863,90 @@ def get_case(
     )
 
     return serialize_case(case)
+
+
+
+@app.get(
+    "/api/v1/cases/{case_id}/messages"
+)
+def get_case_messages(
+    case_id: str,
+    user: AuthUser = Depends(
+        get_current_user
+    ),
+):
+    case = get_case_or_404(case_id)
+    authorize_case_access(
+        case,
+        user,
+    )
+
+    return {
+        "case_id": case_id,
+        "messages": case.get(
+            "messages",
+            [],
+        ),
+    }
+
+
+@app.post(
+    "/api/v1/cases/{case_id}/messages"
+)
+def send_case_message(
+    case_id: str,
+    request: CaseMessageCreate,
+    user: AuthUser = Depends(
+        get_current_user
+    ),
+):
+    case = get_case_or_404(case_id)
+    authorize_case_access(
+        case,
+        user,
+    )
+
+    body = request.body.strip()
+
+    if not body:
+        raise HTTPException(
+            status_code=400,
+            detail="Message cannot be empty.",
+        )
+
+    message = {
+        "message_id": (
+            f"MSG-{uuid4().hex[:10]}"
+            .upper()
+        ),
+        "case_id": case_id,
+        "sender_email": user.email,
+        "sender_name": user.name,
+        "sender_role": user.role,
+        "body": body,
+        "created_at": utc_now(),
+    }
+
+    case.setdefault(
+        "messages",
+        [],
+    ).append(message)
+
+    case["updated_at"] = (
+        message["created_at"]
+    )
+
+    add_audit_event(
+        case,
+        actor=user,
+        action="case_message_sent",
+        description=(
+            f"{user.role.title()} sent "
+            "a case message."
+        ),
+    )
+
+    return message
 
 
 @app.get(

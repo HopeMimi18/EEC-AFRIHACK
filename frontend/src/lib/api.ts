@@ -150,6 +150,17 @@ export interface AuditEvent {
 }
 
 
+export interface CaseMessage {
+  message_id: string;
+  case_id: string;
+  sender_email: string;
+  sender_name: string;
+  sender_role: UserRole;
+  body: string;
+  created_at: string;
+}
+
+
 function messageFromDetail(
   detail: unknown
 ): string {
@@ -413,6 +424,55 @@ export async function finaliseCase(
         body: JSON.stringify(
           payload
         ),
+      }
+    );
+
+  return response.json();
+}
+
+
+
+export async function getCaseMessages(
+  caseId: string,
+  token: string
+): Promise<CaseMessage[]> {
+  const response =
+    await authenticatedFetch(
+      `/api/v1/cases/${encodeURIComponent(
+        caseId
+      )}/messages`,
+      token
+    );
+
+  const body =
+    (await response.json()) as {
+      messages: CaseMessage[];
+    };
+
+  return body.messages;
+}
+
+
+export async function sendCaseMessage(
+  caseId: string,
+  body: string,
+  token: string
+): Promise<CaseMessage> {
+  const response =
+    await authenticatedFetch(
+      `/api/v1/cases/${encodeURIComponent(
+        caseId
+      )}/messages`,
+      token,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          body,
+        }),
       }
     );
 

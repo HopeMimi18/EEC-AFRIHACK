@@ -1327,7 +1327,7 @@
     bottom: 12px;
     min-height: 62px;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 3px;
     padding: 7px;
     border: 1px solid var(--client-border);
@@ -1382,4 +1382,12 @@
   .client-panel {
     padding: 19px;
   }
+}
+.client-mobile-nav .client-nav-button:last-child {
+  color: #d8c4bd;
+}
+
+.client-mobile-nav .client-nav-button:last-child:hover {
+  color: #ffffff;
+  background: rgba(168, 70, 70, 0.22);
 }

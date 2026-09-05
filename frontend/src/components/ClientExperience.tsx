@@ -30,6 +30,8 @@ import type {
   ProcessDocumentsResponse,
 } from "../lib/api";
 
+import CaseChat from "./CaseChat";
+
 import "./ClientExperience.css";
 
 
@@ -696,6 +698,13 @@ export default function ClientExperience({
             setPage("documents")
           }
         />
+
+        <NavButton
+          active={false}
+          icon={<LogOut size={18} />}
+          label="Sign out"
+          onClick={onLogout}
+        />
       </div>
 
       <main className="client-experience-main">
@@ -773,6 +782,11 @@ export default function ClientExperience({
 
       {messagesOpen && (
         <MessageDrawer
+          session={session}
+          caseId={
+            result?.case_id ??
+            null
+          }
           messages={messages}
           onClose={() =>
             setMessagesOpen(false)
@@ -1653,10 +1667,14 @@ function DocumentsPage({
 
 
 function MessageDrawer({
+  session,
+  caseId,
   messages,
   onClose,
   onMarkAllRead,
 }: {
+  session: AuthSession;
+  caseId: string | null;
   messages: MessageItem[];
   onClose: () => void;
   onMarkAllRead: () => void;
@@ -1693,8 +1711,17 @@ function MessageDrawer({
             onMarkAllRead
           }
         >
-          Mark all as read
+          Mark reminders as read
         </button>
+
+        <div style={{ marginTop: 16 }}>
+          <CaseChat
+            session={session}
+            caseId={caseId}
+            title="Client ↔ Adviser"
+            compact
+          />
+        </div>
 
         <div className="message-list">
           {messages.map(

@@ -19,6 +19,7 @@ import {
   LoaderCircle,
   LockKeyhole,
   LogOut,
+  MessageCircle,
   RefreshCcw,
   ShieldCheck,
   Upload,
@@ -49,6 +50,7 @@ import {
 
 import "./App.css";
 import ClientExperience from "./components/ClientExperience";
+import CaseChat from "./components/CaseChat";
 
 type ProcessingStage =
   | "idle"
@@ -1068,6 +1070,39 @@ function App() {
                   result.compliance_readiness
                 }
               />
+
+              <section className="card">
+                <div className="card-heading">
+                  <div>
+                    <span className="step-label">
+                      CLIENT COMMUNICATION
+                    </span>
+
+                    <h2>
+                      Case Conversation
+                    </h2>
+
+                    <p>
+                      Send clear updates without
+                      requiring the client to
+                      understand internal processes.
+                    </p>
+                  </div>
+
+                  <MessageCircle
+                    className="heading-icon"
+                    size={28}
+                  />
+                </div>
+
+                <CaseChat
+                  session={session}
+                  caseId={
+                    result.case_id
+                  }
+                  title="Client ↔ Adviser"
+                />
+              </section>
 
               <section className="card">
                 <div className="card-heading">
