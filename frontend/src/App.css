@@ -1878,3 +1878,33 @@ button.download-button {
     width: 100%;
   }
 }
+
+/* Adviser sidebar navigation targets */
+.nav-scroll-target {
+  scroll-margin-top: 24px;
+}
+
+.nav-item {
+  cursor: pointer;
+}
+
+@media (max-width: 780px) {
+  .nav-scroll-target {
+    scroll-margin-top: 16px;
+  }
+}
+
+/* Native adviser sidebar navigation */
+html {
+  scroll-behavior: smooth;
+}
+
+.nav a.nav-item,
+a.nav-item {
+  text-decoration: none;
+  font: inherit;
+}
+
+.nav-scroll-target {
+  scroll-margin-top: 24px;
+}

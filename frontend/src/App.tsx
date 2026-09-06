@@ -636,6 +636,69 @@ function App() {
     }
   }
 
+  async function navigateToAdviserSection(
+  sectionId:
+    | "fna-analysis"
+    | "compliance-readiness"
+) {
+  if (
+    !session ||
+    session.user.role !== "adviser"
+  ) {
+    return;
+  }
+
+  const existingTarget =
+    document.getElementById(
+      sectionId
+    );
+
+  if (existingTarget) {
+    existingTarget.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+    return;
+  }
+
+  const caseId =
+    result?.case_id ??
+    cases[0]?.case_id;
+
+  if (!caseId) {
+    setError(
+      "No client case is available yet. Submit or open a case first."
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
+    return;
+  }
+
+  if (
+    !result ||
+    result.case_id !== caseId
+  ) {
+    await handleOpenCase(caseId);
+  }
+
+  window.setTimeout(() => {
+    const target =
+      document.getElementById(
+        sectionId
+      );
+
+    target?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, 200);
+}  
+  
+
   function updateClientField<
     K extends keyof FNADataPayload["client_demographics"],
   >(
@@ -837,17 +900,29 @@ function App() {
               Adviser Workspace
             </button>
 
-            <button className="nav-item">
-              <WalletCards
-                size={19}
-              />
-              FNA Records
+            <button
+              className="nav-item"
+              type="button"
+              onClick={() =>
+                void navigateToAdviserSection(
+                  "fna-analysis"
+                )
+              }
+            >
+              <WalletCards size={19} />
+              FNA Analysis
             </button>
 
-            <button className="nav-item">
-              <ShieldCheck
-                size={19}
-              />
+            <button
+              className="nav-item"
+              type="button"
+              onClick={() =>
+                void navigateToAdviserSection(
+                  "compliance-readiness"
+                )
+              }
+            >
+              <ShieldCheck size={19} />
               Compliance Readiness
             </button>
           </nav>
@@ -1075,11 +1150,16 @@ function App() {
                 />
               </section>
 
-              <CompliancePanel
-                readiness={
-                  result.compliance_readiness
-                }
-              />
+              <div
+                id="compliance-readiness"
+                className="nav-scroll-target"
+              >
+                <CompliancePanel
+                  readiness={
+                    result.compliance_readiness
+                  }
+                />
+              </div>
 
               <section className="card">
                 <div className="card-heading">
@@ -1308,7 +1388,10 @@ function App() {
                 )}
               </section>
 
-              <section className="summary-section">
+              <section
+                id="fna-analysis"
+                className="summary-section nav-scroll-target"
+              >
                 <div className="section-title">
                   <div>
                     <span className="step-label">
